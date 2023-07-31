@@ -28,19 +28,26 @@ def main():
     mask = torch.where(
         prob < 0.05, True, False
     )
+    sparse = mask.to_sparse_csr()
 
     # built-in
     y_1 = torch.matmul(
         q, k.transpose(0, 1)
     )
-    # y_1 = torch.where(
-    #     mask, y_1, torch.zeros_like(y_1)
-    # )
+    y_1 = torch.masked_select(
+        y_1, mask=mask
+    )
 
     # custom kernel
-    y_2 = ext.sparse_mha_forward(q, k)
+    indptr = sparse.crow_indices()
+    indices = sparse.col_indices()
+    y_2 = ext.sparse_mha_forward(
+        indptr, indices, q, k
+    )
 
     # check
+    print('y_1:', y_1)
+    print('y_2:', y_2)
     print(torch.allclose(y_1, y_2, atol=1e-3))
 
     return

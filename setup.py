@@ -39,6 +39,7 @@ setup(
             'naive_gpt.ext',
             sources=[
                 'extension/entry.cpp',
+                'extension/fused_mha.cu',
             ]
         )
     ],

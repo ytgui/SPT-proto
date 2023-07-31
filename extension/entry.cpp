@@ -4,11 +4,10 @@
 #include <torch/extension.h>
 // clang-format on
 
-#define CHECK_INPUT(x, d, t)                                                                                           \
-    TORCH_CHECK(x.dim() == d, #x " must be of dim " #d);                                                               \
-    TORCH_CHECK(x.scalar_type() == t, #x " must be type of " #t);                                                      \
-    TORCH_CHECK(x.is_contiguous(), #x " custom kernel requires contiguous tensor")
+torch::Tensor sparse_mha_forward(
+    const torch::Tensor &query, const torch::Tensor &key
+);
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-#m.def("mha_forward", &mha_forward, "MHA forward");
+    m.def("sparse_mha_forward", &sparse_mha_forward, "sparse MHA forward");
 }

@@ -1,6 +1,6 @@
 Language: Cpp
-BasedOnStyle: LLVM
-ColumnLimit: 120
+BasedOnStyle: Google
+ColumnLimit: 80
 AlignAfterOpenBracket: BlockIndent
 IndentWidth: 4
 TabWidth: 4

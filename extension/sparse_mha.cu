@@ -47,18 +47,20 @@ __global__ void sparse_mha_backward_cuda_kernel(
     const scalar_t *grad_output, scalar_t *grad_q, scalar_t *grad_k
 ) {
     // index
+    index_t tx = threadIdx.x;
     index_t ty = threadIdx.y;
     index_t gy = blockIdx.y * blockDim.y + ty;
 
-    // grad_query[y, i] += grad_softmax[y, x] * key[x, i]
-    for (index_t i = 0; i < d_head; i += 1) {
-        scalar_t reduced = 0.0;
-        for (index_t gi = indptr[gy]; gi < indptr[gy + 1]; gi += 1) {
-            index_t gx = indices[gi];
-            reduced += grad_output[gi] * k[gx * d_head + i];
-        }
-        grad_q[gy * d_head + i] = reduced;
+    // gradient
+    scalar_t reduced = 0.0;
+    for (index_t gi = indptr[gy]; gi < indptr[gy + 1]; gi += 1) {
+        index_t gx = indices[gi];
+        atomicAdd(
+            &grad_k[gx * d_head + tx], grad_output[gi] * q[gy * d_head + tx]
+        );
+        reduced += grad_output[gi] * k[gx * d_head + tx];
     }
+    grad_q[gy * d_head + tx] = reduced;
 }
 
 torch::Tensor sparse_mha_forward_cuda(
@@ -71,18 +73,14 @@ torch::Tensor sparse_mha_forward_cuda(
     CHECK_DIM(indices, 1);
     CHECK_TYPE(indptr, torch::kInt64);
     CHECK_TYPE(indices, torch::kInt64);
-    TORCH_CHECK(query.sizes() == key.sizes(), "query.size() != key.size()");
-    TORCH_CHECK(
-        query.scalar_type() == key.scalar_type(), "scalar_type is different"
-    );
+    TORCH_CHECK(query.sizes() == key.sizes());
+    TORCH_CHECK(query.scalar_type() == key.scalar_type());
 
     // sizes
     index_t d_head = query.size(-1);
     index_t seq_length = query.size(0);
-    TORCH_CHECK(seq_length % BLOCK_SIZE == 0, "seq_length is not aligned");
-    TORCH_CHECK(
-        seq_length + 1 == indptr.size(0), "indptr doesn't match seq_length"
-    );
+    // TORCH_CHECK(seq_length % BLOCK_SIZE == 0);
+    TORCH_CHECK(seq_length + 1 == indptr.size(0));
     auto output = torch::zeros({indices.size(0)}, query.options());
 
     // dispatch
@@ -113,27 +111,25 @@ std::vector<torch::Tensor> sparse_mha_backward_cuda(
     CHECK_DIM(query, 2);
     CHECK_DIM(indptr, 1);
     CHECK_DIM(indices, 1);
+    CHECK_DIM(grad_output, 1);
     CHECK_TYPE(indptr, torch::kInt64);
     CHECK_TYPE(indices, torch::kInt64);
-    TORCH_CHECK(query.sizes() == key.sizes(), "size not equal");
-    TORCH_CHECK(indices.sizes() == grad_output.sizes(), "size not equal");
-    TORCH_CHECK(query.scalar_type() == key.scalar_type(), "dtype not equal");
+    TORCH_CHECK(query.sizes() == key.sizes());
+    TORCH_CHECK(indices.sizes() == grad_output.sizes());
+    TORCH_CHECK(query.scalar_type() == key.scalar_type());
 
     // sizes
     index_t d_head = query.size(-1);
     index_t seq_length = query.size(0);
-    TORCH_CHECK(seq_length % BLOCK_SIZE == 0, "seq_length is not aligned");
-    TORCH_CHECK(
-        seq_length + 1 == indptr.size(0), "indptr doesn't match seq_length"
-    );
+    // TORCH_CHECK(seq_length % BLOCK_SIZE == 0);
+    TORCH_CHECK(seq_length + 1 == indptr.size(0));
     auto grad_query = torch::zeros_like(query);
     auto grad_key = torch::zeros_like(key);
 
     // dispatch
-    index_t dt = 1;
-    index_t db = seq_length / dt;
-    dim3 threads(dt), blocks(1, db);
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+    dim3 threads(d_head);
+    dim3 blocks(1, seq_length);
+    AT_DISPATCH_FLOATING_TYPES(
         grad_query.scalar_type(), "sparse_mha_backward_cuda", ([&] {
             sparse_mha_backward_cuda_kernel<scalar_t><<<blocks, threads>>>(
                 seq_length, d_head, indptr.data_ptr<index_t>(),

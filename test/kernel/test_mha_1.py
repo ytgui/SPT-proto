@@ -1,4 +1,5 @@
 import torch
+import random
 from torch import autograd
 from naive_gpt import ext
 
@@ -22,6 +23,7 @@ class SparseMHA(autograd.Function):
                  grad_output: torch.Tensor):
         indptr, indices, query, key = \
             ctx.saved_tensors
+        grad_output = grad_output.contiguous()
         grad_query, grad_key = ext.sparse_mha_backward(
             indptr, indices, query, key, grad_output
         )
@@ -38,20 +40,20 @@ def sparse_mha(indptr: torch.Tensor,
 
 
 def main():
-    n_heads = 4
-    d_model = 64
-    seq_length = 16
-    batch_size = 16
-    d_head = d_model // n_heads
+    d_head = random.choice(
+        [16, 32, 48, 64]
+    )
+    n_heads = random.randint(1, 8)
+    seq_length = random.randint(1, 256)
     cuda_device = 'cuda'
 
     #
-    q = torch.randn(
+    q = torch.ones(
         [seq_length, d_head],
         requires_grad=True,
         device=cuda_device
     )
-    k = torch.randn(
+    k = torch.ones(
         [seq_length, d_head],
         requires_grad=True,
         device=cuda_device
@@ -68,9 +70,7 @@ def main():
     sparse = mask.to_sparse_csr()
 
     # built-in
-    y_1 = torch.matmul(
-        q, k.transpose(0, 1)
-    )
+    y_1 = torch.matmul(q, k.T)
     y_1 = torch.masked_select(
         y_1, mask=mask
     )
@@ -79,29 +79,26 @@ def main():
     grad_k_1 = k.grad.detach().clone()
 
     # custom kernel
-    q.grad.zero_()
-    k.grad.zero_()
-    indptr = sparse.crow_indices()
-    indices = sparse.col_indices()
+    q.grad = None
+    k.grad = None
+    indptr_2 = sparse.crow_indices()
+    indices_2 = sparse.col_indices()
     y_2 = sparse_mha(
-        indptr, indices, q, k
+        indptr_2, indices_2, q, k
     )
     torch.sum(y_2).backward()
     grad_q_2 = q.grad.detach().clone()
     grad_k_2 = k.grad.detach().clone()
 
     # check
-    print('-- y --')
-    print(
-        torch.allclose(
-            y_1, y_2, atol=1e-3
-        )
+    assert torch.allclose(
+        y_1, y_2, atol=1e-3
     )
-    print('-- grad --')
-    print(
-        torch.allclose(
-            grad_q_1, grad_q_2, atol=1e-3
-        )
+    assert torch.allclose(
+        grad_q_1, grad_q_2, atol=1e-3
+    )
+    assert torch.allclose(
+        grad_k_1, grad_k_2, atol=1e-3
     )
 
 

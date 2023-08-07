@@ -15,19 +15,11 @@ class TestCommand(Command):
 
     def run(self):
         import pytest
-        import coverage
-
-        #
-        cov = coverage.Coverage(
-            config_file=True
-        )
-        #
-        cov.start()
-        ret = pytest.main(['-x', 'test'])
-        cov.stop()
-        #
-        if ret == pytest.ExitCode.OK:
-            cov.report()
+        pytest.main([
+            '-nauto', '-x',
+            '--cov=naive_gpt',
+            '--tb=long', 'test/'
+        ])
 
 
 setup(
@@ -42,7 +34,7 @@ setup(
                 'extension/sparse_mha.cu',
             ]
         )
-    ],
+    ] if torch.cuda.is_available() else [],
     cmdclass={
         'test': TestCommand,
         'build_ext': cpp_extension.BuildExtension,

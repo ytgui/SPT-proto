@@ -8,13 +8,6 @@
 ## Features
 | Status | Description                                      |
 | ------ | ------------------------------------------------ |
-| DONE   | load_1: dump transformers into checkpoint        |
-| DONE   | test_1: load checkpoint and compare results      |
-| DONE   | test_2: upgrade pre-trained model with LoRA      |
-| DONE   | model_1: dense DefaultOPTModel implementation    |
-| DONE   | model_2: LoRA ModuleHandler for model_1          |
-| DONE   | loader_1: wikitext-103 dataset loader module     |
-| DONE   | loader_2: alpaca-cleaned dataset loader module   |
 | DONE   | train_1: insert k-means pq layers into GPT model |
 | DONE   | train_2: make opt ready for dense fine-tuning    |
 | TODO   | train_3: build complete fine-tuning pipeline     |

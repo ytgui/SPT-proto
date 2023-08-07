@@ -1,4 +1,5 @@
 import os
+import random
 from naive_gpt import loaders
 
 
@@ -10,14 +11,14 @@ def test_mmlu():
     dm = loaders.MMLUModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
+        n_shots=random.randrange(10),
         seq_length=seq_length + 1,
         batch_size=batch_size,
         num_workers=1
     )
     loader = dm.val_dataloader()
-    sample, path = next(iter(loader))
+    sample = next(iter(loader))
     assert len(sample) == 1
-    assert len(path) == 1
     text = sample[0]
 
     # decode

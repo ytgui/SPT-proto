@@ -9,13 +9,15 @@ from naive_torch import datasets, layers
 class MMLUModule(L.LightningDataModule):
     def __init__(self,
                  root: str,
-                 seq_length: int,
+                 n_shots: int,
+                 max_length: int,
                  batch_size: int,
                  num_workers: int):
         super().__init__()
         #
         self.root = root
-        self.seq_length = seq_length
+        self.n_shots = n_shots
+        self.max_length = max_length
         self.batch_size = batch_size
         self.num_workers = num_workers
         #
@@ -30,7 +32,7 @@ class MMLUModule(L.LightningDataModule):
                 self.tokenizer.encode
             ),
             datasets.Truncate(
-                seq_length=self.seq_length,
+                seq_length=self.max_length,
                 output_mode='tail'
             ),
             transforms.ToTensor()
@@ -38,6 +40,7 @@ class MMLUModule(L.LightningDataModule):
         return data.DataLoader(
             datasets.MMLUDataset(
                 self.root, mode=mode,
+                n_shots=self.n_shots,
                 text_transform=transform
             ), shuffle=False,
             batch_size=self.batch_size,

@@ -84,17 +84,17 @@ def convert(name: str):
     opt.eval()
 
     # convert model
-    config = opt.config
-    model = OPTModel(
-        d_model=config.hidden_size,
-        n_heads=config.num_attention_heads,
-        n_layers=config.num_hidden_layers,
-        p_dropout=config.dropout,
-        vocab_size=config.vocab_size,
-        d_embedding=config.word_embed_proj_dim,
-        d_feedforward=config.ffn_dim,
-        max_length=config.max_position_embeddings
-    )
+    config = {
+        'd_model': opt.config.hidden_size,
+        'n_heads': opt.config.num_attention_heads,
+        'n_layers': opt.config.num_hidden_layers,
+        'p_dropout': opt.config.dropout,
+        'vocab_size': opt.config.vocab_size,
+        'd_embedding': opt.config.word_embed_proj_dim,
+        'd_feedforward': opt.config.ffn_dim,
+        'max_length': opt.config.max_position_embeddings,
+    }
+    model = OPTModel(**config)
     model.load_pretrained(state_dict)
     model.eval()
 
@@ -102,7 +102,7 @@ def convert(name: str):
     batch_size = 16
     seq_length = 64
     x = torch.randint(
-        high=config.vocab_size,
+        high=config['vocab_size'],
         size=[batch_size, seq_length]
     )
     y_1, y_2 = opt(x)['logits'], model(x)
@@ -117,7 +117,10 @@ def convert(name: str):
         pass
     name = name.split('/')[-1]
     torch.save(
-        model.state_dict(),
+        {
+            'config': config,
+            'state_dict': model.state_dict()
+        },
         f='.data/{}.ckpt'.format(name)
     )
 

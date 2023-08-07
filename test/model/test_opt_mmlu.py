@@ -15,15 +15,12 @@ class LightningModel(L.LightningModule):
         self.lr = 1e-4
         self.weight_decay = 1e-2
         #
-        self.model = models.OPTModel(
-            d_model=768, n_heads=12,
-            n_layers=12, p_dropout=0.1,
-            vocab_size=50272, d_embedding=768,
-            d_feedforward=3072, max_length=2048
+        ckpt = torch.load(
+            '.data/opt-125m.ckpt'
         )
-        self.model.load_state_dict(
-            torch.load('.data/opt-125m.ckpt')
-        )
+        config = ckpt['config']
+        self.model = models.OPTModel(**config)
+        self.model.load_state_dict(ckpt['state_dict'])
         #
         self.loss_fn = nn.CrossEntropyLoss()
         self.metrics_fn = Accuracy(task='binary')
@@ -56,7 +53,7 @@ class LightningModel(L.LightningModule):
 def train():
     seq_length = 256
     batch_size = 1
-    n_shots = 5
+    n_shots = 1
 
     # loader
     dm = loaders.MMLUModule(
@@ -70,9 +67,7 @@ def train():
     summary = callbacks.ModelSummary(3)
     trainer = L.Trainer(
         precision='32-true', accelerator='cpu', devices=1,
-        max_epochs=2, gradient_clip_val=1.0, accumulate_grad_batches=1,
-        limit_val_batches=256, limit_train_batches=16384,
-        callbacks=[summary]
+        limit_val_batches=256, callbacks=[summary]
     )
 
     # evaluate

@@ -6,18 +6,16 @@ from torchtext import transforms
 from naive_torch import datasets, layers
 
 
-class MMLUDataModule(L.LightningDataModule):
+class WikitextDataModule(L.LightningDataModule):
     def __init__(self,
                  root: str,
-                 n_shots: int,
-                 max_length: int,
+                 seq_length: int,
                  batch_size: int,
                  num_workers: int):
         super().__init__()
         #
         self.root = root
-        self.n_shots = n_shots
-        self.max_length = max_length
+        self.seq_length = seq_length
         self.batch_size = batch_size
         self.num_workers = num_workers
         #
@@ -27,20 +25,33 @@ class MMLUDataModule(L.LightningDataModule):
         )
 
     def _dataloader(self, mode: str):
+        datafile = {
+            'test': {
+                'wikitext-103/wiki.test.raw': 1.0
+            },
+            'train': {
+                'wikitext-103/wiki.train.raw': 1.0
+            },
+            'valid': {
+                'wikitext-103/wiki.valid.raw': 1.0
+            }
+        }
+        #
         transform = transforms.Sequential(
             layers.FnModule(
                 self.tokenizer.encode
             ),
-            datasets.Truncate(
-                seq_length=self.max_length,
-                output_mode='tail'
+            datasets.ClampPadding(
+                seq_length=self.seq_length,
+                pad_value=0x01
             ),
             transforms.ToTensor()
         )
         return data.DataLoader(
-            datasets.MMLUDataset(
-                self.root, mode=mode,
-                n_shots=self.n_shots,
+            datasets.LineReader(
+                root=self.root,
+                files=datafile[mode],
+                shuffle=True,
                 text_transform=transform
             ), shuffle=False,
             batch_size=self.batch_size,
@@ -50,3 +61,9 @@ class MMLUDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return self._dataloader(mode='valid')
+
+    def train_dataloader(self):
+        return self._dataloader(mode='train')
+
+    def predict_dataloader(self):
+        return self._dataloader(mode='test')

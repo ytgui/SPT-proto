@@ -5,14 +5,15 @@ from naive_gpt import loaders
 
 def test_mmlu():
     batch_size = 1
-    seq_length = 256
+    seq_length = 1024
+    mmlu_prefix = 'The following are multiple choice questions'
 
     #
-    dm = loaders.MMLUModule(
+    dm = loaders.MMLUDataModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
         n_shots=random.randrange(10),
-        seq_length=seq_length + 1,
+        max_length=seq_length + 1,
         batch_size=batch_size,
         num_workers=1
     )
@@ -30,6 +31,7 @@ def test_mmlu():
     assert target in [
         'A', 'B', 'C', 'D'
     ]
+    assert mmlu_prefix in src
 
     #
     print('----- Q -----\n', src)

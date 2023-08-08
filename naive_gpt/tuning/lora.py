@@ -17,7 +17,10 @@ class LoRAUpgrader:
 
     def onLinear(self,
                  name: str,
-                 child: nn.Module):
+                 child: nn.Linear):
+        assert isinstance(
+            child, nn.Linear
+        )
         Module = layers.LoRALinear
         new_model = Module.from_pretrained(
             d_model=self.lora_r,
@@ -29,7 +32,10 @@ class LoRAUpgrader:
 
     def onEmbedding(self,
                     name: str,
-                    child: nn.Module):
+                    child: nn.Embedding):
+        assert isinstance(
+            child, nn.Embedding
+        )
         Module = layers.LoRAEmbedding
         new_model = Module.from_pretrained(
             d_model=self.lora_r,

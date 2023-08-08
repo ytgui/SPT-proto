@@ -29,13 +29,20 @@ class LightningModel(L.LightningModule):
         model = models.OPTModel(**config)
         model.load_state_dict(ckpt['state_dict'])
         # insert LoRA
-        upgrader = ModuleUpgrader(
+        upgrader_1 = ModuleUpgrader(
             handler=tuning.LoRAUpgrader(
                 lora_r=d_lora,
                 lora_dropout=p_dropout
             )
         )
-        self.model = upgrader.visit(model)
+        model = upgrader_1.visit(model)
+        # insert quantizer
+        upgrader_2 = ModuleUpgrader(
+            handler=tuning.QuantizedUpgrader(
+                d_codeword=4, n_codewords=64
+            )
+        )
+        self.model = upgrader_2.visit(model)
         # loss and metrics
         self.loss_fn = nn.CrossEntropyLoss()
         self.metrics_fn = Perplexity(
@@ -62,7 +69,14 @@ class LightningModel(L.LightningModule):
             ),
             target=torch.flatten(target)
         )
-        return output, loss
+        #
+        loss_vq = 0.0
+        for name, buffer in self.named_buffers():
+            if not name.endswith('.loss'):
+                continue
+            loss_vq += buffer
+        #
+        return output, loss + 0.1 * loss_vq
 
     def training_step(self,
                       batch: torch.Tensor,

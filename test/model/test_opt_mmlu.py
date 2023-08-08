@@ -56,7 +56,7 @@ def train():
     n_shots = 1
 
     # loader
-    dm = loaders.MMLUModule(
+    dm = loaders.MMLUDataModule(
         root=os.getenv('HOME') + '/Public/Datasets/text/',
         n_shots=n_shots, max_length=seq_length + 1,
         batch_size=batch_size, num_workers=1

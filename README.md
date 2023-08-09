@@ -6,12 +6,15 @@
 
 
 ## Features
-| Status | Description                                      |
-| ------ | ------------------------------------------------ |
-| DONE   | train_1: insert k-means pq layers into GPT model |
-| DONE   | train_2: make opt ready for dense fine-tuning    |
-| TODO   | train_3: build complete fine-tuning pipeline     |
-| TODO   | evaluate MMLU score, [llama, opt] * [ppl, mmlu]  |
+| Status | Description                           |
+| ------ | ------------------------------------- |
+| TODO   | build complete fine-tuning pipeline   |
+| TODO   | evaluate MMLU score for OPT and LLAMA |
+
+
+## Section 5
++ the gradient issue around PQ
++ efficient csr-based kernel / pseudo
 
 
 ## Pipeline

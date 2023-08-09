@@ -70,13 +70,13 @@ class LightningModel(L.LightningModule):
             target=torch.flatten(target)
         )
         #
-        loss_vq = 0.0
+        loss_pq = 0.0
         for name, buffer in self.named_buffers():
             if not name.endswith('.loss'):
                 continue
-            loss_vq += buffer
+            loss_pq += buffer
         #
-        return output, loss + 0.1 * loss_vq
+        return output, loss + 0.1 * loss_pq
 
     def training_step(self,
                       batch: torch.Tensor,

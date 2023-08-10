@@ -31,6 +31,7 @@ __global__ void sparse_mha_forward_cuda_kernel(
     index_t qk_offset = n * seq_length * n_heads * d_head;
 
     // contract
+    scalar_t cumulated = 0.0;
     for (index_t cursor = indptr[row]; cursor < indptr[row + 1]; cursor += 1) {
         index_t col = indices[sp_offset + cursor * n_heads + h];
 
@@ -40,9 +41,17 @@ __global__ void sparse_mha_forward_cuda_kernel(
             reduced += q[qk_offset + row * n_heads * d_head + h * d_head + i] *
                        k[qk_offset + col * n_heads * d_head + h * d_head + i];
         }
+        reduced = expf(reduced);
+        cumulated += reduced;
 
         // store
         output[sp_offset + cursor * n_heads + h] = reduced;
+    }
+
+    // softmax
+    scalar_t denominator = 1.0 / cumulated;
+    for (index_t cursor = indptr[row]; cursor < indptr[row + 1]; cursor += 1) {
+        output[sp_offset + cursor * n_heads + h] *= denominator;
     }
 }
 
@@ -50,8 +59,8 @@ template <typename scalar_t>
 __global__ void sparse_mha_backward_cuda_kernel(
     index_t n_nonzeros, index_t seq_length, index_t n_heads, index_t d_head,
     const index_t *indptr, const index_t *indices, const scalar_t *q,
-    const scalar_t *k, const scalar_t *grad_output, scalar_t *grad_q,
-    scalar_t *grad_k
+    const scalar_t *k, const scalar_t *output, const scalar_t *grad_output,
+    scalar_t *grad_q, scalar_t *grad_k
 ) {
     // index
     index_t i = threadIdx.x;
@@ -61,16 +70,26 @@ __global__ void sparse_mha_backward_cuda_kernel(
     index_t sp_offset = n * n_nonzeros * n_heads;
     index_t qk_offset = n * seq_length * n_heads * d_head;
 
-    // gradient
+    // softmax gradient
+    scalar_t cache = 0.0;
+    for (index_t cursor = indptr[row]; cursor < indptr[row + 1]; cursor += 1) {
+        cache += output[sp_offset + cursor * n_heads + h] *
+                 grad_output[sp_offset + cursor * n_heads + h];
+    }
+
+    // dot gradient
     scalar_t reduced = 0.0;
     for (index_t cursor = indptr[row]; cursor < indptr[row + 1]; cursor += 1) {
         index_t col = indices[sp_offset + cursor * n_heads + h];
+        scalar_t grad_softmax =
+            output[sp_offset + cursor * n_heads + h] *
+            (grad_output[sp_offset + cursor * n_heads + h] - cache);
         atomicAdd(
             &grad_k[qk_offset + col * n_heads * d_head + h * d_head + i],
-            grad_output[sp_offset + cursor * n_heads + h] *
+            grad_softmax *
                 q[qk_offset + row * n_heads * d_head + h * d_head + i]
         );
-        reduced += grad_output[sp_offset + cursor * n_heads + h] *
+        reduced += grad_softmax *
                    k[qk_offset + col * n_heads * d_head + h * d_head + i];
     }
     grad_q[qk_offset + row * n_heads * d_head + h * d_head + i] = reduced;
@@ -122,16 +141,18 @@ torch::Tensor sparse_mha_forward_cuda(
 std::vector<torch::Tensor> sparse_mha_backward_cuda(
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &query, const torch::Tensor &key,
-    const torch::Tensor &grad_output
+    const torch::Tensor &output, const torch::Tensor &grad_output
 ) {
     CHECK_DIM(key, 4);
     CHECK_DIM(query, 4);
     CHECK_DIM(indptr, 1);
     CHECK_DIM(indices, 3);
+    CHECK_DIM(output, 3);
     CHECK_DIM(grad_output, 3);
     CHECK_TYPE(indptr, torch::kInt64);
     CHECK_TYPE(indices, torch::kInt64);
     TORCH_CHECK(query.sizes() == key.sizes());
+    TORCH_CHECK(indices.sizes() == output.sizes());
     TORCH_CHECK(indices.sizes() == grad_output.sizes());
     TORCH_CHECK(query.scalar_type() == key.scalar_type());
 
@@ -156,7 +177,7 @@ std::vector<torch::Tensor> sparse_mha_backward_cuda(
                 n_nonzeros, seq_length, n_heads, d_head,
                 indptr.data_ptr<index_t>(), indices.data_ptr<index_t>(),
                 query.data_ptr<scalar_t>(), key.data_ptr<scalar_t>(),
-                grad_output.data_ptr<scalar_t>(),
+                output.data_ptr<scalar_t>(), grad_output.data_ptr<scalar_t>(),
                 grad_query.data_ptr<scalar_t>(), grad_key.data_ptr<scalar_t>()
             );
             TORCH_CHECK(cudaGetLastError() == cudaSuccess);

@@ -12,21 +12,22 @@ class SparseMHA(autograd.Function):
                 indices: torch.Tensor,
                 query: torch.Tensor,
                 key: torch.Tensor):
+        output = ext.sparse_mha_forward(
+            indptr, indices, query, key
+        )
         ctx.save_for_backward(
-            indptr, indices, query, key
+            indptr, indices, query, key, output
         )
-        return ext.sparse_mha_forward(
-            indptr, indices, query, key
-        )
+        return output
 
     @staticmethod
     def backward(ctx,
                  grad_output: torch.Tensor):
-        indptr, indices, query, key = \
+        indptr, indices, query, key, output = \
             ctx.saved_tensors
         grad_output = grad_output.contiguous()
         grad_query, grad_key = ext.sparse_mha_backward(
-            indptr, indices, query, key, grad_output
+            indptr, indices, query, key, output, grad_output
         )
         return None, None, grad_query, grad_key
 
@@ -82,8 +83,11 @@ def test_sparse_mha():
     )
 
     # built-in
+    y_1 = torch.softmax(
+        top_values, dim=-1
+    )
     y_1 = torch.flatten(
-        top_values, start_dim=2
+        y_1, start_dim=2
     ).transpose(-1, -2).contiguous()
     torch.sum(y_1).backward()
     grad_q_1 = q.grad.detach().clone()

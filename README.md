@@ -15,6 +15,7 @@
 ## Section 5
 + the gradient issue around PQ
 + efficient csr-based kernel / pseudo
++ improve: pre-compute indptr, multi-dim indices
 
 
 ## Pipeline

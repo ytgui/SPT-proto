@@ -46,21 +46,24 @@ def test_sparse_mha():
     )
     n_heads = random.randint(1, 16)
     seq_length = random.randint(16, 256)
+    batch_size = random.randint(1, 16)
     cuda_device = 'cuda'
 
     #
     q = torch.randn(
-        [seq_length, n_heads, d_head],
+        [batch_size, seq_length,
+         n_heads, d_head],
         requires_grad=True,
         device=cuda_device
     )
     k = torch.randn(
-        [seq_length, n_heads, d_head],
+        [batch_size, seq_length,
+         n_heads, d_head],
         requires_grad=True,
         device=cuda_device
     )
     attn = torch.einsum(
-        'iae, jae -> aij', q, k
+        'niae, njae -> naij', q, k
     )
 
     # sparse
@@ -71,20 +74,17 @@ def test_sparse_mha():
     )
     top_values, top_indices = top_output
     csr_indices = torch.flatten(
-        top_indices, start_dim=1
-    ).T.contiguous()
+        top_indices, start_dim=2
+    ).transpose(-1, -2).contiguous()
     fixed_indptr = torch.arange(
         0, top_k * (attn.size(-2) + 1),
         step=top_k, device=cuda_device
-    ).view(-1, 1)
-    fixed_indptr = torch.tile(
-        fixed_indptr, dims=[1, n_heads]
     )
 
     # built-in
     y_1 = torch.flatten(
-        top_values, start_dim=1
-    ).T.contiguous()
+        top_values, start_dim=2
+    ).transpose(-1, -2).contiguous()
     torch.sum(y_1).backward()
     grad_q_1 = q.grad.detach().clone()
     grad_k_1 = k.grad.detach().clone()

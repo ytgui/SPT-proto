@@ -19,58 +19,66 @@ using index_t = int64_t;
 
 template <typename scalar_t>
 __global__ void sparse_mha_forward_cuda_kernel(
-    index_t seq_length, index_t d_head, const index_t *indptr,
+    index_t seq_length, index_t n_heads, index_t d_head, const index_t *indptr,
     const index_t *indices, const scalar_t *q, const scalar_t *k,
     scalar_t *output
 ) {
     // index
-    index_t ty = threadIdx.y;
-    index_t gy = blockIdx.y * blockDim.y + ty;
-    for (index_t gi = indptr[gy]; gi < indptr[gy + 1]; gi += 1) {
-        index_t gx = indices[gi];
+    index_t h = threadIdx.x;
+    index_t row = blockIdx.x;
+
+    // contract
+    for (index_t cursor = indptr[row * n_heads + h];
+         cursor < indptr[(row + 1) * n_heads + h]; cursor += 1) {
+        index_t col = indices[cursor * n_heads + h];
 
         // product
         scalar_t reduced = 0.0;
         for (index_t i = 0; i < d_head; i += 1) {
-            reduced += q[gy * d_head + i] * k[gx * d_head + i];
+            reduced += q[row * n_heads * d_head + h * d_head + i] *
+                       k[col * n_heads * d_head + h * d_head + i];
         }
 
         // store
-        output[gi] = reduced;
+        output[cursor * n_heads + h] = reduced;
     }
 }
 
 template <typename scalar_t>
 __global__ void sparse_mha_backward_cuda_kernel(
-    index_t seq_length, index_t d_head, const index_t *indptr,
+    index_t seq_length, index_t n_heads, index_t d_head, const index_t *indptr,
     const index_t *indices, const scalar_t *q, const scalar_t *k,
     const scalar_t *grad_output, scalar_t *grad_q, scalar_t *grad_k
 ) {
     // index
-    index_t tx = threadIdx.x;
-    index_t ty = threadIdx.y;
-    index_t gy = blockIdx.y * blockDim.y + ty;
+    index_t i = threadIdx.x;
+    index_t h = threadIdx.y;
+    index_t row = blockIdx.x;
 
     // gradient
     scalar_t reduced = 0.0;
-    for (index_t gi = indptr[gy]; gi < indptr[gy + 1]; gi += 1) {
-        index_t gx = indices[gi];
+    for (index_t cursor = indptr[row * n_heads + h];
+         cursor < indptr[(row + 1) * n_heads + h]; cursor += 1) {
+        index_t col = indices[cursor * n_heads + h];
         atomicAdd(
-            &grad_k[gx * d_head + tx], grad_output[gi] * q[gy * d_head + tx]
+            &grad_k[col * n_heads * d_head + h * d_head + i],
+            grad_output[cursor * n_heads + h] *
+                q[row * n_heads * d_head + h * d_head + i]
         );
-        reduced += grad_output[gi] * k[gx * d_head + tx];
+        reduced += grad_output[cursor * n_heads + h] *
+                   k[col * n_heads * d_head + h * d_head + i];
     }
-    grad_q[gy * d_head + tx] = reduced;
+    grad_q[row * n_heads * d_head + h * d_head + i] = reduced;
 }
 
 torch::Tensor sparse_mha_forward_cuda(
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &query, const torch::Tensor &key
 ) {
-    CHECK_DIM(key, 2);
-    CHECK_DIM(query, 2);
-    CHECK_DIM(indptr, 1);
-    CHECK_DIM(indices, 1);
+    CHECK_DIM(key, 3);
+    CHECK_DIM(query, 3);
+    CHECK_DIM(indptr, 2);
+    CHECK_DIM(indices, 2);
     CHECK_TYPE(indptr, torch::kInt64);
     CHECK_TYPE(indices, torch::kInt64);
     TORCH_CHECK(query.sizes() == key.sizes());
@@ -78,19 +86,21 @@ torch::Tensor sparse_mha_forward_cuda(
 
     // sizes
     index_t d_head = query.size(-1);
+    index_t n_heads = query.size(1);
     index_t seq_length = query.size(0);
-    // TORCH_CHECK(seq_length % BLOCK_SIZE == 0);
+    index_t n_nonzeros = indices.size(0);
+    TORCH_CHECK(n_heads == indptr.size(-1));
     TORCH_CHECK(seq_length + 1 == indptr.size(0));
-    auto output = torch::zeros({indices.size(0)}, query.options());
+    TORCH_CHECK(indptr.size(-1) == indices.size(-1));
+    auto output = torch::zeros({n_nonzeros, n_heads}, query.options());
 
     // dispatch
-    index_t dt = 1;
-    index_t db = seq_length / dt;
-    dim3 threads(dt), blocks(1, db);
+    dim3 threads(n_heads);
+    dim3 blocks(seq_length);
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(
         output.scalar_type(), "sparse_mha_forward_cuda", ([&] {
             sparse_mha_forward_cuda_kernel<scalar_t><<<blocks, threads>>>(
-                seq_length, d_head, indptr.data_ptr<index_t>(),
+                seq_length, n_heads, d_head, indptr.data_ptr<index_t>(),
                 indices.data_ptr<index_t>(), query.data_ptr<scalar_t>(),
                 key.data_ptr<scalar_t>(), output.data_ptr<scalar_t>()
             );
@@ -107,11 +117,11 @@ std::vector<torch::Tensor> sparse_mha_backward_cuda(
     const torch::Tensor &query, const torch::Tensor &key,
     const torch::Tensor &grad_output
 ) {
-    CHECK_DIM(key, 2);
-    CHECK_DIM(query, 2);
-    CHECK_DIM(indptr, 1);
-    CHECK_DIM(indices, 1);
-    CHECK_DIM(grad_output, 1);
+    CHECK_DIM(key, 3);
+    CHECK_DIM(query, 3);
+    CHECK_DIM(indptr, 2);
+    CHECK_DIM(indices, 2);
+    CHECK_DIM(grad_output, 2);
     CHECK_TYPE(indptr, torch::kInt64);
     CHECK_TYPE(indices, torch::kInt64);
     TORCH_CHECK(query.sizes() == key.sizes());
@@ -120,19 +130,22 @@ std::vector<torch::Tensor> sparse_mha_backward_cuda(
 
     // sizes
     index_t d_head = query.size(-1);
+    index_t n_heads = query.size(1);
     index_t seq_length = query.size(0);
-    // TORCH_CHECK(seq_length % BLOCK_SIZE == 0);
+    index_t n_nonzeros = indices.size(0);
+    TORCH_CHECK(n_heads == indptr.size(-1));
     TORCH_CHECK(seq_length + 1 == indptr.size(0));
+    TORCH_CHECK(indptr.size(-1) == indices.size(-1));
     auto grad_query = torch::zeros_like(query);
     auto grad_key = torch::zeros_like(key);
 
     // dispatch
-    dim3 threads(d_head);
-    dim3 blocks(1, seq_length);
+    dim3 threads(d_head, n_heads);
+    dim3 blocks(seq_length);
     AT_DISPATCH_FLOATING_TYPES(
         grad_query.scalar_type(), "sparse_mha_backward_cuda", ([&] {
             sparse_mha_backward_cuda_kernel<scalar_t><<<blocks, threads>>>(
-                seq_length, d_head, indptr.data_ptr<index_t>(),
+                seq_length, n_heads, d_head, indptr.data_ptr<index_t>(),
                 indices.data_ptr<index_t>(), query.data_ptr<scalar_t>(),
                 key.data_ptr<scalar_t>(), grad_output.data_ptr<scalar_t>(),
                 grad_query.data_ptr<scalar_t>(), grad_key.data_ptr<scalar_t>()

@@ -2,6 +2,7 @@ import torch
 import random
 from torch import autograd
 from naive_gpt import ext
+from tqdm import tqdm
 
 
 class SparseMHA(autograd.Function):
@@ -39,27 +40,27 @@ def sparse_mha(indptr: torch.Tensor,
     )
 
 
-def main():
+def test_sparse_mha():
     d_head = random.choice(
         [16, 32, 48, 64]
     )
-    n_heads = random.randint(1, 8)
-    seq_length = 16 * random.randint(1, 16)
+    n_heads = random.randint(1, 16)
+    seq_length = random.randint(16, 256)
     cuda_device = 'cuda'
 
     #
     q = torch.randn(
-        [seq_length, d_head],
+        [seq_length, n_heads, d_head],
         requires_grad=True,
         device=cuda_device
     )
     k = torch.randn(
-        [seq_length, d_head],
+        [seq_length, n_heads, d_head],
         requires_grad=True,
         device=cuda_device
     )
     attn = torch.einsum(
-        'ie, je -> ij', q, k
+        'iae, jae -> aij', q, k
     )
 
     # sparse
@@ -69,18 +70,21 @@ def main():
         largest=True, sorted=False
     )
     top_values, top_indices = top_output
-    csr_indices = torch.flatten(top_indices)
+    csr_indices = torch.flatten(
+        top_indices, start_dim=1
+    ).T.contiguous()
     fixed_indptr = torch.arange(
         0, top_k * (attn.size(-2) + 1),
         step=top_k, device=cuda_device
-    )
-    sparse_attn = torch.sparse_csr_tensor(
-        crow_indices=fixed_indptr, col_indices=top_indices,
-        values=top_values, size=attn.size()
+    ).view(-1, 1)
+    fixed_indptr = torch.tile(
+        fixed_indptr, dims=[1, n_heads]
     )
 
     # built-in
-    y_1 = torch.flatten(top_values)
+    y_1 = torch.flatten(
+        top_values, start_dim=1
+    ).T.contiguous()
     torch.sum(y_1).backward()
     grad_q_1 = q.grad.detach().clone()
     grad_k_1 = k.grad.detach().clone()
@@ -107,5 +111,10 @@ def main():
     )
 
 
+def test_multiple():
+    for _ in tqdm(range(1024)):
+        test_sparse_mha()
+
+
 if __name__ == '__main__':
-    main()
+    test_multiple()

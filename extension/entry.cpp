@@ -4,14 +4,16 @@
 #include <torch/extension.h>
 // clang-format on
 
-torch::Tensor sparse_mha_forward_cuda(
+std::vector<torch::Tensor> sparse_mha_forward_cuda(
     const torch::Tensor &indptr, const torch::Tensor &indices,
-    const torch::Tensor &query, const torch::Tensor &key
+    const torch::Tensor &query, const torch::Tensor &key,
+    const torch::Tensor &value
 );
 
 std::vector<torch::Tensor> sparse_mha_backward_cuda(
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &query, const torch::Tensor &key,
+    const torch::Tensor &value, const torch::Tensor &attention,
     const torch::Tensor &output, const torch::Tensor &grad_output
 );
 

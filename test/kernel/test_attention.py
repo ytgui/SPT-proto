@@ -11,33 +11,37 @@ class SparseMHA(autograd.Function):
                 indptr: torch.Tensor,
                 indices: torch.Tensor,
                 query: torch.Tensor,
-                key: torch.Tensor):
-        output = ext.sparse_mha_forward(
-            indptr, indices, query, key
+                key: torch.Tensor,
+                value: torch.Tensor):
+        attn, output = ext.sparse_mha_forward(
+            indptr, indices, query, key, value
         )
         ctx.save_for_backward(
-            indptr, indices, query, key, output
+            indptr, indices, query, key, value, attn, output
         )
         return output
 
     @staticmethod
     def backward(ctx,
                  grad_output: torch.Tensor):
-        indptr, indices, query, key, output = \
-            ctx.saved_tensors
+        indptr, indices = ctx.saved_tensors[:2]
+        query, key, value = ctx.saved_tensors[2:5]
+        attn, output = ctx.saved_tensors[5:]
+        #
         grad_output = grad_output.contiguous()
-        grad_query, grad_key = ext.sparse_mha_backward(
-            indptr, indices, query, key, output, grad_output
+        grad_query, grad_key, grad_value = ext.sparse_mha_backward(
+            indptr, indices, query, key, value, attn, output, grad_output
         )
-        return None, None, grad_query, grad_key
+        return None, None, grad_query, grad_key, grad_value
 
 
 def sparse_mha(indptr: torch.Tensor,
                indices: torch.Tensor,
                query: torch.Tensor,
-               key: torch.Tensor):
+               key: torch.Tensor,
+               value: torch.Tensor):
     return SparseMHA.apply(
-        indptr, indices, query, key
+        indptr, indices, query, key, value
     )
 
 
@@ -52,20 +56,18 @@ def test_sparse_mha():
 
     #
     q = torch.randn(
-        [batch_size, seq_length,
-         n_heads, d_head],
-        requires_grad=True,
-        device=cuda_device
+        [batch_size, seq_length, n_heads, d_head],
+        requires_grad=True, device=cuda_device
     )
     k = torch.randn(
-        [batch_size, seq_length,
-         n_heads, d_head],
-        requires_grad=True,
-        device=cuda_device
+        [batch_size, seq_length, n_heads, d_head],
+        requires_grad=True, device=cuda_device
     )
-    attn = torch.einsum(
-        'niae, njae -> naij', q, k
+    v = torch.randn(
+        [batch_size, seq_length, n_heads, d_head],
+        requires_grad=True, device=cuda_device
     )
+    attn = torch.einsum('niae, njae -> naij', q, k)
 
     # sparse
     top_k = attn.size(-1) // 4
@@ -83,25 +85,30 @@ def test_sparse_mha():
     )
 
     # built-in
-    y_1 = torch.softmax(
-        top_values, dim=-1
+    attn = torch.scatter(
+        torch.full_like(
+            attn, fill_value=float('-inf')
+        ),
+        dim=-1, index=top_indices, src=top_values
     )
-    y_1 = torch.flatten(
-        y_1, start_dim=2
-    ).transpose(-1, -2).contiguous()
+    attn = torch.softmax(attn, dim=-1)
+    y_1 = torch.einsum(
+        'naij, njae -> niae', attn, v
+    )
     torch.sum(y_1).backward()
     grad_q_1 = q.grad.detach().clone()
     grad_k_1 = k.grad.detach().clone()
+    grad_v_1 = v.grad.detach().clone()
 
     # custom kernel
-    q.grad = None
-    k.grad = None
+    q.grad, k.grad, v.grad = None, None, None
     y_2 = sparse_mha(
-        fixed_indptr, csr_indices, q, k
+        fixed_indptr, csr_indices, q, k, v
     )
     torch.sum(y_2).backward()
     grad_q_2 = q.grad.detach().clone()
     grad_k_2 = k.grad.detach().clone()
+    grad_v_2 = v.grad.detach().clone()
 
     # check
     assert torch.allclose(
@@ -112,6 +119,9 @@ def test_sparse_mha():
     )
     assert torch.allclose(
         grad_k_1, grad_k_2, atol=1e-3
+    )
+    assert torch.allclose(
+        grad_v_1, grad_v_2, atol=1e-3
     )
 
 

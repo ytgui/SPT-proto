@@ -8,6 +8,9 @@
 ## Features
 | Status | Description                           |
 | ------ | ------------------------------------- |
+| TODO   | add test cases for naive_gpt/tuning   |
+| TODO   | clean up test/kernel to decouple op   |
+| TODO   | finish phase-2 tuning by using sddmm  |
 | TODO   | build complete fine-tuning pipeline   |
 | TODO   | evaluate MMLU score for OPT and LLAMA |
 
@@ -26,7 +29,9 @@
 + Sparse Analyser
   + gradually replace by sparse op
 + Sparse Runtime
-  + highly optimized kernels
+  + fused sparse mha
+  + top-k selection
+  + sparse ffn
 
 
 ## Evaluation

@@ -47,7 +47,7 @@ class QuantizedUpgrader:
 
     def onVanillaAttention(self,
                            name: str,
-                           child: nn.Module):
+                           child: layers.VanillaAttention):
         assert isinstance(
             child, layers.VanillaAttention
         )

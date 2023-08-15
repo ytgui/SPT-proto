@@ -88,8 +88,8 @@ def test_sparse_mha():
     attn = torch.scatter(
         torch.full_like(
             attn, fill_value=float('-inf')
-        ),
-        dim=-1, index=top_indices, src=top_values
+        ), dim=-1,
+        index=top_indices, src=top_values
     )
     attn = torch.softmax(attn, dim=-1)
     y_1 = torch.einsum(
@@ -125,10 +125,10 @@ def test_sparse_mha():
     )
 
 
-def test_multiple():
+def main():
     for _ in tqdm(range(1024)):
         test_sparse_mha()
 
 
 if __name__ == '__main__':
-    test_multiple()
+    main()

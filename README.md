@@ -7,10 +7,19 @@
 ## Features
 | Status | Description                           |
 | ------ | ------------------------------------- |
-| TODO   | add test cases for naive_gpt/tuning   |
 | TODO   | finish phase-2 tuning by using sddmm  |
 | TODO   | build complete fine-tuning pipeline   |
+| TODO   | optimize latency of the quantizer     |
 | TODO   | evaluate MMLU score for OPT and LLAMA |
+
+
+## Timing (seq=512, bsz=16)
+| Stage             | Time |
+| ----------------- | ---- |
+| quantizer.train   | 0.05 |
+| quantizer.encode  | 0.20 |
+| torch.topk        | 0.01 |
+| kernel.sparse_mha | 0.03 |
 
 
 ## Section 5

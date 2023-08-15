@@ -1,51 +1,10 @@
 import torch
 import random
-from torch import autograd
-from naive_gpt import ext
+from naive_gpt import kernels
 from tqdm import tqdm
 
 
-class SparseMHA(autograd.Function):
-    @staticmethod
-    def forward(ctx,
-                indptr: torch.Tensor,
-                indices: torch.Tensor,
-                query: torch.Tensor,
-                key: torch.Tensor,
-                value: torch.Tensor):
-        attn, output = ext.sparse_mha_forward(
-            indptr, indices, query, key, value
-        )
-        ctx.save_for_backward(
-            indptr, indices, query, key, value, attn, output
-        )
-        return output
-
-    @staticmethod
-    def backward(ctx,
-                 grad_output: torch.Tensor):
-        indptr, indices = ctx.saved_tensors[:2]
-        query, key, value = ctx.saved_tensors[2:5]
-        attn, output = ctx.saved_tensors[5:]
-        #
-        grad_output = grad_output.contiguous()
-        grad_query, grad_key, grad_value = ext.sparse_mha_backward(
-            indptr, indices, query, key, value, attn, output, grad_output
-        )
-        return None, None, grad_query, grad_key, grad_value
-
-
-def sparse_mha(indptr: torch.Tensor,
-               indices: torch.Tensor,
-               query: torch.Tensor,
-               key: torch.Tensor,
-               value: torch.Tensor):
-    return SparseMHA.apply(
-        indptr, indices, query, key, value
-    )
-
-
-def test_sparse_mha():
+def test_spmha():
     d_head = random.choice(
         [16, 32, 48, 64]
     )
@@ -102,7 +61,7 @@ def test_sparse_mha():
 
     # custom kernel
     q.grad, k.grad, v.grad = None, None, None
-    y_2 = sparse_mha(
+    y_2 = kernels.sparse_mha(
         fixed_indptr, csr_indices, q, k, v
     )
     torch.sum(y_2).backward()
@@ -127,7 +86,7 @@ def test_sparse_mha():
 
 def main():
     for _ in tqdm(range(1024)):
-        test_sparse_mha()
+        test_spmha()
 
 
 if __name__ == '__main__':

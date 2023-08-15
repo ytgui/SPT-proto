@@ -1,6 +1,6 @@
 import torch
-from torch import nn
 from naive_torch import layers, models
+from naive_gpt import kernels
 
 
 class SparseAttention(layers.VanillaAttention):
@@ -20,7 +20,7 @@ class SparseAttention(layers.VanillaAttention):
             n_subspaces=d_head // d_codeword
         )
         self.table = models.PQTable(
-            quantizer=self.quantizer, dim=1
+            pq=self.quantizer, dim=1
         )
 
     def _get_attn(self,
@@ -51,47 +51,17 @@ class SparseAttention(layers.VanillaAttention):
         )[-1]
         top_indices = torch.flatten(
             top_indices, start_dim=2
-        )
+        ).transpose(-1, -2).contiguous()
         fixed_indptr = torch.arange(
-            0, top_k * (q.size(1) + 1), step=top_k
-        ).view(1, 1, -1)
-        fixed_indptr = fixed_indptr.repeat(
-            [distance.size(0), distance.size(1), 1]
-        )
-        sparse_mask = torch.sparse_csr_tensor(
-            crow_indices=fixed_indptr,
-            col_indices=top_indices,
-            values=torch.ones_like(
-                top_indices, dtype=q.dtype
-            ),
-            size=[distance.size(0), distance.size(1),
-                  distance.size(2), distance.size(2)]
+            0, top_k * (q.size(1) + 1),
+            step=top_k, device=q.device
         )
 
-        # TODO: CSR SDDMM
-        raise NotImplementedError
+        #
+        return [fixed_indptr, top_indices, q, k]
 
-
-def main():
-    d_head = 64
-    n_heads = 4
-    seq_length = 64
-    batch_size = 16
-
-    #
-    x = torch.randn(
-        [batch_size, seq_length,
-         n_heads, d_head]
-    )
-    sparse_fn = SparseAttention(
-        d_head=d_head, d_codeword=4,
-        n_codewords=64, p_dropout=0.0
-    )
-    y_1 = sparse_fn(x, x, x)
-
-    #
-    return
-
-
-if __name__ == '__main__':
-    main()
+    def _apply_attn(self, attn: tuple, v: torch.Tensor):
+        fixed_indptr, top_indices, q, k = attn
+        return kernels.sparse_mha(
+            fixed_indptr, top_indices, q, k, v
+        )

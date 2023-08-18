@@ -1,21 +1,4 @@
-// clang-format off
-#include <vector>
-#include <torch/extension.h>
-// clang-format on
-
-#define BLOCK_SIZE 16
-
-#define CHECK_DIM(x, d)                                                   \
-    TORCH_CHECK(x.is_cuda(), #x " must be a CUDA tensor")                 \
-    TORCH_CHECK(x.dim() == d, #x " must be of dim " #d);                  \
-    TORCH_CHECK(                                                          \
-        x.is_contiguous(), #x " custom kernel requires contiguous tensor" \
-    )
-
-#define CHECK_TYPE(x, t) \
-    TORCH_CHECK(x.scalar_type() == t, #x " must be type of " #t)
-
-using index_t = int64_t;
+#include "common.h"
 
 template <typename scalar_t>
 __global__ void mha_forward_cuda_kernel(
@@ -69,7 +52,7 @@ __global__ void mha_forward_cuda_kernel(
 }
 
 template <typename scalar_t>
-__global__ void sddmm_backward_cuda_kernel(
+__global__ void mha_backward_cuda_kernel(
     index_t n_nonzeros, index_t seq_length, index_t n_heads, index_t d_head,
     const index_t *indptr, const index_t *indices, const scalar_t *q,
     const scalar_t *k, const scalar_t *v, scalar_t *attention,
@@ -213,9 +196,10 @@ std::vector<torch::Tensor> sparse_mha_backward_cuda(
     // dispatch
     dim3 threads(d_head, n_heads);
     dim3 blocks(seq_length, batch_size);
+    // error: no instance of overloaded function "atomicAdd" matches the argument list (half)
     AT_DISPATCH_FLOATING_TYPES(
-        grad_query.scalar_type(), "sddmm_backward_cuda_kernel", ([&] {
-            sddmm_backward_cuda_kernel<scalar_t><<<blocks, threads>>>(
+        grad_query.scalar_type(), "mha_backward_cuda_kernel", ([&] {
+            mha_backward_cuda_kernel<scalar_t><<<blocks, threads>>>(
                 n_nonzeros, seq_length, n_heads, d_head,
                 indptr.data_ptr<index_t>(), indices.data_ptr<index_t>(),
                 query.data_ptr<scalar_t>(), key.data_ptr<scalar_t>(),

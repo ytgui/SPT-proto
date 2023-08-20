@@ -13,7 +13,7 @@ def test_cdist():
 
     #
     query = torch.randn(
-        [n_queries, n_subspaces, d_code],
+        [n_subspaces, n_queries, d_code],
         device=cuda_device, requires_grad=True
     )
     table = torch.randn(
@@ -22,9 +22,7 @@ def test_cdist():
     )
 
     #
-    y_1 = torch.cdist(
-        query.transpose(0, 1), table, p=1.0
-    )
+    y_1 = torch.cdist(query, table, p=1.0)
     y_2 = kernels.pq_cdist(query, table)
     assert torch.allclose(y_1, y_2, atol=1e-3)
 

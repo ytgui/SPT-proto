@@ -1,3 +1,6 @@
+# layers
+from . import layers
+
 # loaders
 from . import loaders
 

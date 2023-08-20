@@ -5,23 +5,26 @@ from tqdm import tqdm
 
 
 def test_cdist():
-    d_code = 16 * random.randint(1, 4)
-    n_queries = 16 * random.randint(1, 1024)
-    n_codewords = 16 * random.randint(1, 16)
+    d_code = random.choice([4, 8, 16])
+    n_queries = 4 * random.randint(1, 16)
+    n_codewords = 4 * random.randint(1, 16)
+    n_subspaces = random.randint(1, 16)
     cuda_device = 'cuda'
 
     #
     query = torch.randn(
-        [n_queries, d_code], device=cuda_device,
-        requires_grad=True
+        [n_queries, n_subspaces, d_code],
+        device=cuda_device, requires_grad=True
     )
     table = torch.randn(
-        [n_codewords, d_code], device=cuda_device,
-        requires_grad=True
+        [n_subspaces, n_codewords, d_code],
+        device=cuda_device, requires_grad=True
     )
 
     #
-    y_1 = torch.cdist(query, table, p=1.0)
+    y_1 = torch.cdist(
+        query.transpose(0, 1), table, p=1.0
+    )
     y_2 = kernels.pq_cdist(query, table)
     assert torch.allclose(y_1, y_2, atol=1e-3)
 

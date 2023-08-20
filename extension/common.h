@@ -6,8 +6,6 @@
 #include <torch/extension.h>
 // clang-format on
 
-#define BLOCK_SIZE 16
-
 #define CHECK_DIM(x, d)                                                   \
     TORCH_CHECK(x.is_cuda(), #x " must be a CUDA tensor")                 \
     TORCH_CHECK(x.dim() == d, #x " must be of dim " #d);                  \

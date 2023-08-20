@@ -67,7 +67,7 @@ class OPTBase(nn.Module):
         # position
         batch_size = x.size(0)
         indices = torch.arange(
-            seq_length
+            seq_length, device=x.device
         ) + self.PE_OFFSET
         indices = torch.tile(
             indices, dims=[batch_size]

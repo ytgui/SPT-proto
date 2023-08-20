@@ -18,10 +18,9 @@ def test_attention():
     sparse_fn = tuning.SparseAttention(
         d_head=d_head, d_codeword=4,
         n_codewords=64, p_dropout=0.0
-    )
-    sparse_fn = sparse_fn.to(
-        device=cuda_device
-    )
+    ).to(device=cuda_device)
+
+    #
     y_1 = sparse_fn(x, x, x)
     assert torch.allclose(y_1, x, atol=1e-3)
 

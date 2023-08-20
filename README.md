@@ -7,9 +7,11 @@
 ## Features
 | Status | Description                           |
 | ------ | ------------------------------------- |
+| TODO   | bump models.PQ into here, refine it   |
+| TODO   | optimize N-dimentional PQ estimator   |
+| TODO   | optimize and prune FFN by blkmm       |
 | TODO   | finish phase-2 tuning by using sddmm  |
 | TODO   | build complete fine-tuning pipeline   |
-| TODO   | optimize latency of the quantizer     |
 | TODO   | evaluate MMLU score for OPT and LLAMA |
 
 

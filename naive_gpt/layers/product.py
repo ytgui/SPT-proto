@@ -45,7 +45,7 @@ class PQ(nn.Module):
         z_flat = z_flat.view(
             [z_flat.size(0), self.n_subspaces, -1]
         )
-        z_flat = z_flat.transpose(0, 1)
+        z_flat = z_flat.transpose(0, 1).contiguous()
 
         # indices
         if mode == 'decode':

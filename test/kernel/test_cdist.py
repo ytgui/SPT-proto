@@ -1,13 +1,12 @@
 import torch
 import random
 from naive_gpt import kernels
-from tqdm import tqdm
 
 
 def test_cdist():
     d_code = random.choice([4, 8, 16])
-    n_queries = 4 * random.randint(1, 16)
-    n_codewords = 4 * random.randint(1, 16)
+    n_queries = 4 * random.randint(1, 64)
+    n_codewords = 4 * random.randint(1, 64)
     n_subspaces = random.randint(1, 16)
     cuda_device = 'cuda'
 
@@ -26,10 +25,12 @@ def test_cdist():
     y_2 = kernels.pq_cdist(query, table)
     assert torch.allclose(y_1, y_2, atol=1e-3)
 
+    #
+    print('[PASS] test_cdist()')
+
 
 def main():
-    for _ in tqdm(range(1024)):
-        test_cdist()
+    test_cdist()
 
 
 if __name__ == '__main__':

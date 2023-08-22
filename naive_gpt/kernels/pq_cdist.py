@@ -8,12 +8,18 @@ class PQCDist(autograd.Function):
     def forward(ctx,
                 query: torch.Tensor,
                 table: torch.Tensor):
+        ctx.save_for_backward(query, table)
         return ext.cdist_forward_cuda(query, table)
 
     @staticmethod
     def backward(ctx,
                  grad_output: torch.Tensor):
-        raise NotImplementedError
+        query, table = ctx.saved_tensors
+        output = ext.cdist_backward_cuda(
+            query, table, grad_output
+        )
+        grad_query, grad_table = output
+        return grad_query, grad_table
 
 
 def pq_cdist(query: torch.Tensor,

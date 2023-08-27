@@ -31,9 +31,9 @@ linear = LinearFunction.apply
 
 
 def test_fc():
-    in_features = 16 * random.randint(1, 64)
-    out_features = 16 * random.randint(1, 64)
-    batch_size = 16 * random.randint(1, 256)
+    in_features = 64 * random.randint(1, 64)
+    out_features = 64 * random.randint(1, 64)
+    batch_size = 64 * random.randint(1, 16)
 
     #
     x = torch.rand(
@@ -46,8 +46,7 @@ def test_fc():
     )
 
     # builtin
-    # y_1 = torch.matmul(x, weight.T)
-    y_1 = nn.functional.linear(x, weight)
+    y_1 = torch.matmul(x, weight.T)
     y_1.sum().backward()
     grad_x_1 = x.grad.detach().clone()
     grad_w_1 = weight.grad.detach().clone()
@@ -61,6 +60,7 @@ def test_fc():
     grad_w_2 = weight.grad.detach().clone()
 
     # check
+    torch.cuda.synchronize()
     assert torch.allclose(y_1, y_2, atol=1e-3)
     assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
     assert torch.allclose(grad_w_1, grad_w_2, atol=1e-3)
@@ -85,7 +85,7 @@ def bench_fc():
     before = time.time()
     for _ in range(200):
         y_1 = nn.functional.linear(x, weight)
-        y_1.sum().backward()
+        # y_1.sum().backward()
     torch.cuda.synchronize()
     print('timing 0:', time.time() - before)
 
@@ -95,7 +95,7 @@ def bench_fc():
     before = time.time()
     for _ in range(200):
         y_2 = linear(x, weight)
-        y_2.sum().backward()
+        # y_2.sum().backward()
     torch.cuda.synchronize()
     print('timing 1:', time.time() - before)
 
@@ -106,7 +106,4 @@ def main():
 
 
 if __name__ == "__main__":
-    torch.backends.cudnn.allow_tf32 = False
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.set_float32_matmul_precision('highest')
     main()

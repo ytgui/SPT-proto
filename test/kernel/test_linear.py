@@ -31,9 +31,9 @@ linear = LinearFunction.apply
 
 
 def test_fc():
-    in_features = 64 * random.randint(1, 64)
-    out_features = 64 * random.randint(1, 64)
-    batch_size = 64 * random.randint(1, 16)
+    in_features = 128 * random.randint(1, 16)
+    out_features = 128 * random.randint(1, 64)
+    batch_size = 128 * random.randint(1, 16)
 
     #
     x = torch.rand(
@@ -84,8 +84,8 @@ def bench_fc():
     torch.cuda.synchronize()
     before = time.time()
     for _ in range(200):
-        y_1 = nn.functional.linear(x, weight)
-        # y_1.sum().backward()
+        y_1 = torch.matmul(x, weight.T)
+        y_1.sum().backward()
     torch.cuda.synchronize()
     print('timing 0:', time.time() - before)
 
@@ -95,7 +95,7 @@ def bench_fc():
     before = time.time()
     for _ in range(200):
         y_2 = linear(x, weight)
-        # y_2.sum().backward()
+        y_2.sum().backward()
     torch.cuda.synchronize()
     print('timing 1:', time.time() - before)
 

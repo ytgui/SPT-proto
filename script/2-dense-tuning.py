@@ -8,6 +8,7 @@ from naive_torch.models import ModuleUpgrader
 from naive_gpt import loaders, models, tuning
 from pytorch_lightning import callbacks
 from torchmetrics import Perplexity
+from torchmetrics import Accuracy
 
 
 class LightningModel(L.LightningModule):
@@ -38,9 +39,10 @@ class LightningModel(L.LightningModule):
         self.model = upgrader.visit(model)
         # loss and metrics
         self.loss_fn = nn.CrossEntropyLoss()
-        self.metrics_fn = Perplexity(
+        self.ppl_fn = Perplexity(
             ignore_index=self.PAD_VALUE
         )
+        self.accuracy_fn = Accuracy(task='binary')
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
@@ -81,9 +83,22 @@ class LightningModel(L.LightningModule):
         output = self.shared_step(
             batch[:, :-1], target=batch[:, 1:]
         )[0]
+        # ppl
         self.log(
-            'ppl', self.metrics_fn(
+            'ppl', self.ppl_fn(
                 output, target=batch[:, 1:]
+            ),
+            prog_bar=True, sync_dist=True
+        )
+        # accuracy
+        target = batch[:, -1]
+        predict = torch.argmax(
+            output[:, -1, :], dim=-1
+        )
+        is_equal = torch.eq(predict, target)
+        self.log(
+            'accuracy', self.accuracy_fn(
+                is_equal, target=torch.ones_like(is_equal)
             ),
             prog_bar=True, sync_dist=True
         )
@@ -98,7 +113,7 @@ def main():
     )
     parser.add_argument(
         '--device', help='device of cpu or cuda',
-        default='cpu'
+        default='cuda'
     )
     parser.add_argument(
         '--seq_length', help='pad sequence to fixed length',
@@ -117,15 +132,19 @@ def main():
         default=0.1
     )
     args = parser.parse_args()
-    print('[INFO] args:', vars(args))
 
     # loader
-    dm = loaders.AlpacaDataModule(
+    dm = loaders.WikitextDataModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
         seq_length=args.seq_length + 1,
-        batch_size=args.batch_size,
-        num_workers=1
+        batch_size=args.batch_size, num_workers=1
+    )
+    mmlu_dm = loaders.MMLUDataModule(
+        root=os.getenv('HOME') +
+        '/Public/Datasets/text/',
+        n_shots=1, max_length=args.seq_length + 1,
+        batch_size=1, num_workers=1
     )
 
     # lightning
@@ -142,7 +161,8 @@ def main():
     )
 
     # fine-tuning
-    trainer.validate(model, dm)
+    trainer.validate(model, dataloaders=dm)
+    trainer.validate(model, dataloaders=mmlu_dm)
 
 
 if __name__ == '__main__':

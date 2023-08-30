@@ -32,6 +32,7 @@ setup(
             sources=[
                 'extension/entry.cpp',
                 'extension/pq_cdist.cu',
+                'extension/sparse_mm.cu',
                 'extension/sparse_mha.cu',
             ]
         )

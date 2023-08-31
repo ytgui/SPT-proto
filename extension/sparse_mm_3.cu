@@ -3,7 +3,7 @@
 #define BK 16
 #define BM 16
 
-template <typename scalar_t>
+template <typename scalar_t, typename vector_t>
 __global__ void sddmm_forward_cuda_kernel(
     index_t seq_length, index_t d_head, const index_t *indptr,
     const index_t *indices, const scalar_t *lhs, const scalar_t *rhs,
@@ -13,14 +13,28 @@ __global__ void sddmm_forward_cuda_kernel(
     index_t ty = threadIdx.y;
     index_t gy = blockIdx.y * blockDim.y + ty;
 
+    // cache
+    vector_t cache_lhs[BK / 4];
+    for (index_t k = 0; k < BK; k += 4) {
+        cache_lhs[k / 4] = __ldg(
+            (const vector_t *)&lhs[gy * d_head + k]
+        );
+    }
+
     // contract
     for (index_t i = indptr[gy]; i < indptr[gy + 1]; i += 1) {
         index_t gx = indices[i];
 
         // product
         scalar_t reduced = 0.0;
-        for (index_t k = 0; k < d_head; k += 1) {
-            reduced += lhs[gy * d_head + k] * rhs[gx * d_head + k];
+        for (index_t k = 0; k < BK; k += 4) {
+            const vector_t cache_rhs = __ldg(
+                (const vector_t *)&rhs[gx * d_head + k]
+            );
+            reduced += cache_lhs[k / 4].x * cache_rhs.x;
+            reduced += cache_lhs[k / 4].y * cache_rhs.y;
+            reduced += cache_lhs[k / 4].z * cache_rhs.z;
+            reduced += cache_lhs[k / 4].w * cache_rhs.w;
         }
 
         // store
@@ -52,16 +66,12 @@ torch::Tensor sddmm_forward_cuda(
     // dispatch
     dim3 threads(1, BM);
     dim3 blocks(1, seq_length / BM);
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-        query.scalar_type(), "sddmm_forward_cuda_kernel", ([&] {
-            sddmm_forward_cuda_kernel<scalar_t><<<blocks, threads>>>(
-                seq_length, d_head, indptr.data_ptr<index_t>(),
-                indices.data_ptr<index_t>(), query.data_ptr<scalar_t>(),
-                key.data_ptr<scalar_t>(), output.data_ptr<scalar_t>()
-            );
-            TORCH_CHECK(cudaGetLastError() == cudaSuccess);
-        })
+    sddmm_forward_cuda_kernel<float, float4><<<blocks, threads>>>(
+        seq_length, d_head, indptr.data_ptr<index_t>(),
+        indices.data_ptr<index_t>(), query.data_ptr<float>(),
+        key.data_ptr<float>(), output.data_ptr<float>()
     );
+    TORCH_CHECK(cudaGetLastError() == cudaSuccess);
 
     //
     return output;

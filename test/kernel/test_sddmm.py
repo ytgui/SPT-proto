@@ -31,8 +31,8 @@ def sddmm_fn(indptr: torch.Tensor,
 
 
 def test_sddmm():
-    d_model = 16 * random.randint(1, 16)
-    seq_length = 16 * random.randint(1, 256)
+    d_model = 64 * random.randint(1, 16)
+    seq_length = 256 * random.randint(1, 16)
     cuda_device = 'cuda'
 
     # mask
@@ -68,7 +68,7 @@ def test_sddmm():
 
 
 def bench_sddmm():
-    d_model = 256
+    d_model = 16
     seq_length = 2048
     cuda_device = 'cuda'
 

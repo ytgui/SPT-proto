@@ -1,30 +1,61 @@
 #include "common.h"
 
 #define BK 16
-#define BM 16
+#define BM 64
+#define BN BM
 
 template <typename scalar_t>
 __global__ void sddmm_forward_cuda_kernel(
     index_t seq_length, index_t d_head, const index_t *indptr,
-    const index_t *indices, const scalar_t *query, const scalar_t *key,
+    const index_t *indices, const scalar_t *lhs, const scalar_t *rhs,
     scalar_t *output
 ) {
     // index
     index_t ty = threadIdx.y;
     index_t gy = blockIdx.y * blockDim.y + ty;
 
-    // contract
-    for (index_t i = indptr[gy]; i < indptr[gy + 1]; i += 1) {
-        index_t gx = indices[i];
+    // cache
+    scalar_t cache_lhs[BK];
+    __shared__ scalar_t cache_rhs[BN][BK];
 
-        // product
-        scalar_t reduced = 0.0;
-        for (index_t k = 0; k < d_head; k += 1) {
-            reduced += query[gy * d_head + k] * key[gx * d_head + k];
+    // k-loop
+    for (index_t offset_k = 0; offset_k < d_head; offset_k += BK) {
+        // sparse
+        index_t cursor = indptr[gy];
+        index_t cursor_limit = indptr[gy + 1];
+
+        // n-loop
+        for (index_t offset_n = 0; offset_n < seq_length; offset_n += BN) {
+            // load
+            for (index_t k = 0; k < BK; k += 1) {
+                cache_lhs[k] = lhs[
+                    gy * d_head + (offset_k + k)
+                ];
+                cache_rhs[ty][k] = rhs[
+                    (offset_n + ty) * d_head + (offset_k + k)
+                ];
+            }
+            __syncthreads();
+
+            // contract
+            while (cursor < cursor_limit) {
+                index_t col = indices[cursor];
+                if (col >= (offset_n + BN)) {
+                    break;
+                }
+
+                // product
+                scalar_t reduced = 0.0;
+                for (index_t k = 0; k < BK; k += 1) {
+                    reduced += cache_lhs[k] * cache_rhs[col % BN][k];
+                }
+
+                // store
+                output[cursor] += reduced;
+                cursor += 1;
+            }
+            __syncthreads();
         }
-
-        // store
-        output[i] = reduced;
     }
 }
 

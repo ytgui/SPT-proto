@@ -1,8 +1,6 @@
 #include "common.h"
 
-#define BK 16
-#define BM 16
-#define BN 16
+#define BSZ 16
 
 template <typename scalar_t>
 __global__ void sddmm_forward_cuda_kernel(
@@ -16,12 +14,12 @@ __global__ void sddmm_forward_cuda_kernel(
     index_t gy = blockIdx.y * blockDim.y + ty;
 
     // cache
-    __shared__ scalar_t cache_lhs[BK];
+    __shared__ scalar_t cache_lhs[BSZ];
     cache_lhs[tx] = lhs[gy * d_head + tx];
     __syncthreads();
 
     // contract
-    for (index_t i = indptr[gy]; i < indptr[gy + 1]; i += BN) {
+    for (index_t i = indptr[gy]; i < indptr[gy + 1]; i += BSZ) {
         index_t gx = indices[i + tx];
 
         // product
@@ -48,14 +46,14 @@ torch::Tensor sddmm_forward_cuda(
 
     // sizes
     index_t d_head = query.size(-1);
-    TORCH_CHECK((d_head % BK) == 0);
+    TORCH_CHECK((d_head % BSZ) == 0);
     index_t seq_length = query.size(0);
-    TORCH_CHECK((seq_length % BM) == 0);
+    TORCH_CHECK((seq_length % BSZ) == 0);
     TORCH_CHECK(indptr.size(0) == seq_length + 1);
     auto output = torch::zeros_like(indices, query.options());
 
     // dispatch
-    dim3 threads(BN);
+    dim3 threads(BSZ);
     dim3 blocks(1, seq_length);
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(
         query.scalar_type(), "sddmm_forward_cuda_kernel", ([&] {

@@ -31,9 +31,8 @@ setup(
             'naive_gpt.ext',
             sources=[
                 'extension/entry.cpp',
-                'extension/pq_cdist.cu',
-                'extension/sparse_mm.cu',
-                'extension/sparse_mha.cu',
+                'extension/cdist.cu',
+                'extension/sddmm.cpp',
             ]
         )
     ] if torch.cuda.is_available() else [],

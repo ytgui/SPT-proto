@@ -3,7 +3,10 @@
 
 // clang-format off
 #include <vector>
+#include <cusparse.h>
+#include <cuda_runtime.h>
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAContext.h>
 // clang-format on
 
 #define CHECK_DIM(x, d)                                                   \
@@ -16,6 +19,30 @@
 #define CHECK_TYPE(x, t) \
     TORCH_CHECK(x.scalar_type() == t, #x " must be type of " #t)
 
-using index_t = int64_t;
+#define CUDA_CHECH(func)                                                      \
+    {                                                                         \
+        cudaError_t status = (func);                                          \
+        if (status != cudaSuccess) {                                          \
+            printf(                                                           \
+                "CUDA API failed at line %d with error: %s (%d)\n", __LINE__, \
+                cudaGetErrorString(status), status                            \
+            );                                                                \
+            throw std::runtime_error("cuda error");                           \
+        }                                                                     \
+    }
+
+#define CUSPARSE_CHECK(func)                                            \
+    {                                                                   \
+        cusparseStatus_t status = (func);                               \
+        if (status != CUSPARSE_STATUS_SUCCESS) {                        \
+            printf(                                                     \
+                "CUSPARSE API failed at line %d with error: %s (%d)\n", \
+                __LINE__, cusparseGetErrorString(status), status        \
+            );                                                          \
+            throw std::runtime_error("cusparse error");                 \
+        }                                                               \
+    }
+
+using index_t = int32_t;
 
 #endif

@@ -6,15 +6,15 @@ from torch import profiler
 from naive_gpt import ext
 
 
-class SDDMM(autograd.Function):
+class SPMM(autograd.Function):
     @staticmethod
     def forward(ctx,
                 indptr: torch.Tensor,
                 indices: torch.Tensor,
-                query: torch.Tensor,
-                key: torch.Tensor):
-        return ext.sddmm_forward_cuda(
-            indptr, indices, query, key
+                values: torch.Tensor,
+                x: torch.Tensor):
+        return ext.spmm_forward_cuda(
+            indptr, indices, values, x
         )
 
     @staticmethod
@@ -23,16 +23,16 @@ class SDDMM(autograd.Function):
         raise NotImplementedError
 
 
-def sddmm_fn(indptr: torch.Tensor,
-             indices: torch.Tensor,
-             query: torch.Tensor,
-             key: torch.Tensor):
-    return SDDMM.apply(indptr, indices, query, key)
+def spmm_fn(indptr: torch.Tensor,
+            indices: torch.Tensor,
+            values: torch.Tensor,
+            x: torch.Tensor):
+    return SPMM.apply(indptr, indices, values, x)
 
 
-def test_sddmm():
-    d_model = 64 # * random.randint(1, 4)
-    seq_length = 2048 # * random.randint(1, 16)
+def test_spmm():
+    d_model = 16 * random.randint(1, 4)
+    seq_length = 64 * random.randint(1, 16)
     cuda_device = 'cuda'
 
     # mask
@@ -54,30 +54,25 @@ def test_sddmm():
     indices = indices.type(torch.int32)
     indptr = indptr.type(torch.int32)
 
-    # query
-    q = torch.randn(
-        [seq_length, d_model], device=cuda_device
-    )
-    k = torch.randn(
+    # x
+    x = torch.randn(
         [seq_length, d_model], device=cuda_device
     )
 
     # check
-    y_1 = torch.multiply(mask, torch.matmul(q, k.T))
-    y_2: torch.Tensor = torch.sparse.sampled_addmm(
-        sparse_mask, q, k.T, alpha=1.0, beta=0.0
+    y_1 = torch.matmul(mask, x)
+    y_2 = torch.sparse.mm(sparse_mask, x)
+    y_3: torch.Tensor = spmm_fn(
+        indptr, indices, values=sparse_mask.values(), x=x
     )
-    y_3: torch.Tensor = sddmm_fn(
-        indptr=indptr, indices=indices, query=q, key=k
-    )
-    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
-    assert torch.allclose(y_2.values(), y_3, atol=1e-3)
+    assert torch.allclose(y_1, y_2, atol=1e-3)
+    assert torch.allclose(y_2, y_3, atol=1e-3)
 
     #
-    print('[PASS] test_sddmm()')
+    print('[PASS] test_spmm()')
 
 
-def bench_sddmm():
+def bench_spmm():
     d_model = 64
     seq_length = 1024
     cuda_device = 'cuda'
@@ -101,11 +96,8 @@ def bench_sddmm():
     indices = indices.type(torch.int32)
     indptr = indptr.type(torch.int32)
 
-    # query
-    q = torch.randn(
-        [seq_length, d_model], device=cuda_device
-    )
-    k = torch.randn(
+    # x
+    x = torch.randn(
         [seq_length, d_model], device=cuda_device
     )
 
@@ -116,9 +108,7 @@ def bench_sddmm():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(200):
-            y_1 = torch.multiply(
-                mask, torch.matmul(q, k.T)
-            )
+            y_1 = torch.matmul(mask, x)
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -132,9 +122,7 @@ def bench_sddmm():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(200):
-            y_2 = torch.sparse.sampled_addmm(
-                sparse_mask, q, k.T, alpha=1.0, beta=0.0
-            )
+            y_2 = torch.sparse.mm(sparse_mask, x)
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -148,8 +136,8 @@ def bench_sddmm():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(200):
-            y_3 = sddmm_fn(
-                indptr=indptr, indices=indices, query=q, key=k
+            y_3: torch.Tensor = spmm_fn(
+                indptr, indices, values=sparse_mask.values(), x=x
             )
     print(
         prof.key_averages().table(
@@ -158,12 +146,12 @@ def bench_sddmm():
     )
 
     #
-    print('[PASS] bench_sddmm()')
+    print('[PASS] bench_spmm()')
 
 
 def main():
-    test_sddmm()
-    bench_sddmm()
+    test_spmm()
+    bench_spmm()
 
 
 if __name__ == '__main__':

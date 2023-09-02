@@ -16,7 +16,7 @@ class CDist(autograd.Function):
                  grad_output: torch.Tensor):
         query, table = ctx.saved_tensors
         output = ext.cdist_backward_cuda(
-            query, table, grad_output
+            query, table, grad_output.contiguous()
         )
         grad_query, grad_table = output
         return grad_query, grad_table

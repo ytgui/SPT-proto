@@ -7,8 +7,8 @@ from naive_gpt import kernels
 
 def test_cdist():
     d_code = random.choice([4, 8, 16])
-    n_queries = 4 * random.randint(1, 64)
-    n_codewords = 4 * random.randint(1, 64)
+    n_queries = 64 * random.randint(1, 16)
+    n_codewords = 64 * random.randint(1, 16)
     n_subspaces = random.randint(1, 16)
     cuda_device = 'cuda'
 
@@ -62,6 +62,23 @@ def bench_cdist():
         device=cuda_device, requires_grad=True
     )
 
+    # dot
+    time.sleep(2.0)
+    with profiler.profile(
+        activities=[profiler.ProfilerActivity.CUDA],
+        profile_memory=True, with_flops=True
+    ) as prof:
+        for _ in range(20):
+            y_1 = torch.matmul(
+                query, table.transpose(-1, -2)
+            )
+            torch.sum(y_1).backward()
+    print(
+        prof.key_averages().table(
+            sort_by='cuda_time_total', row_limit=5
+        )
+    )
+
     # cdist
     time.sleep(2.0)
     with profiler.profile(
@@ -69,7 +86,8 @@ def bench_cdist():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            y_1 = torch.cdist(query, table, p=1.0)
+            y_2 = torch.cdist(query, table, p=1.0)
+            torch.sum(y_2).backward()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -83,7 +101,8 @@ def bench_cdist():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            y_2 = kernels.cdist(query, table)
+            y_3 = kernels.cdist(query, table)
+            torch.sum(y_3).backward()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

@@ -31,7 +31,7 @@ def test_cdist():
     #
     query.grad = None
     table.grad = None
-    y_2 = kernels.pq_cdist(query, table)
+    y_2 = kernels.cdist(query, table)
     torch.mean(y_2).backward()
     grad_q_2 = query.grad.detach().clone()
     grad_t_2 = table.grad.detach().clone()
@@ -83,7 +83,7 @@ def bench_cdist():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            y_2 = kernels.pq_cdist(query, table)
+            y_2 = kernels.cdist(query, table)
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

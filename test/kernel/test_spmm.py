@@ -1,33 +1,8 @@
 import time
 import torch
 import random
-from torch import autograd
 from torch import profiler
-from naive_gpt import ext
-
-
-class SPMM(autograd.Function):
-    @staticmethod
-    def forward(ctx,
-                indptr: torch.Tensor,
-                indices: torch.Tensor,
-                values: torch.Tensor,
-                x: torch.Tensor):
-        return ext.spmm_forward_cuda(
-            indptr, indices, values, x
-        )
-
-    @staticmethod
-    def backward(ctx,
-                 grad_output: torch.Tensor):
-        raise NotImplementedError
-
-
-def spmm_fn(indptr: torch.Tensor,
-            indices: torch.Tensor,
-            values: torch.Tensor,
-            x: torch.Tensor):
-    return SPMM.apply(indptr, indices, values, x)
+from naive_gpt import kernels
 
 
 def test_spmm():
@@ -62,7 +37,7 @@ def test_spmm():
     # check
     y_1 = torch.matmul(mask, x)
     y_2 = torch.sparse.mm(sparse_mask, x)
-    y_3: torch.Tensor = spmm_fn(
+    y_3: torch.Tensor = kernels.spmm(
         indptr, indices, values=sparse_mask.values(), x=x
     )
     assert torch.allclose(y_1, y_2, atol=1e-3)
@@ -136,7 +111,7 @@ def bench_spmm():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(200):
-            y_3: torch.Tensor = spmm_fn(
+            y_3: torch.Tensor = kernels.spmm(
                 indptr, indices, values=sparse_mask.values(), x=x
             )
     print(

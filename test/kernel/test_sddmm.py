@@ -1,38 +1,13 @@
 import time
 import torch
 import random
-from torch import autograd
 from torch import profiler
-from naive_gpt import ext
-
-
-class SDDMM(autograd.Function):
-    @staticmethod
-    def forward(ctx,
-                indptr: torch.Tensor,
-                indices: torch.Tensor,
-                query: torch.Tensor,
-                key: torch.Tensor):
-        return ext.sddmm_forward_cuda(
-            indptr, indices, query, key
-        )
-
-    @staticmethod
-    def backward(ctx,
-                 grad_output: torch.Tensor):
-        raise NotImplementedError
-
-
-def sddmm_fn(indptr: torch.Tensor,
-             indices: torch.Tensor,
-             query: torch.Tensor,
-             key: torch.Tensor):
-    return SDDMM.apply(indptr, indices, query, key)
+from naive_gpt import kernels
 
 
 def test_sddmm():
-    d_model = 64 # * random.randint(1, 4)
-    seq_length = 2048 # * random.randint(1, 16)
+    d_model = 16 * random.randint(1, 16)
+    seq_length = 64 * random.randint(1, 64)
     cuda_device = 'cuda'
 
     # mask
@@ -67,7 +42,7 @@ def test_sddmm():
     y_2: torch.Tensor = torch.sparse.sampled_addmm(
         sparse_mask, q, k.T, alpha=1.0, beta=0.0
     )
-    y_3: torch.Tensor = sddmm_fn(
+    y_3: torch.Tensor = kernels.sddmm(
         indptr=indptr, indices=indices, query=q, key=k
     )
     assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
@@ -148,7 +123,7 @@ def bench_sddmm():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(200):
-            y_3 = sddmm_fn(
+            y_3 = kernels.sddmm(
                 indptr=indptr, indices=indices, query=q, key=k
             )
     print(

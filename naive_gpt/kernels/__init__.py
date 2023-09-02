@@ -1,2 +1,8 @@
-# PQ CDist
-from .pq_cdist import pq_cdist
+# cdist
+from .cdist import cdist
+
+# sddmm
+from .sddmm import sddmm
+
+# spmm
+from .spmm import spmm

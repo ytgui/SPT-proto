@@ -51,7 +51,7 @@ class PQ(nn.Module):
         if mode == 'decode':
             indices = z_flat
         else:
-            distance = kernels.pq_cdist(
+            distance = kernels.cdist(
                 z_flat, table=self.weight
             )
             indices = torch.argmin(

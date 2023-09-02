@@ -3,7 +3,7 @@ from torch import autograd
 from naive_gpt import ext
 
 
-class PQCDist(autograd.Function):
+class CDist(autograd.Function):
     @staticmethod
     def forward(ctx,
                 query: torch.Tensor,
@@ -22,6 +22,6 @@ class PQCDist(autograd.Function):
         return grad_query, grad_table
 
 
-def pq_cdist(query: torch.Tensor,
+def cdist(query: torch.Tensor,
              table: torch.Tensor):
-    return PQCDist.apply(query, table)
+    return CDist.apply(query, table)

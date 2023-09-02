@@ -43,13 +43,13 @@ torch::Tensor spmm_forward_cuda(
     CUSPARSE_CHECK(cusparseSpMM_bufferSize(
         handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
         CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, lhs, rhs, &beta, target,
-        CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, &external_size
+        CUDA_R_32F, CUSPARSE_SPMM_CSR_ALG3, &external_size
     ));
     auto buffer = torch::zeros({external_size}, x.options());
     CUSPARSE_CHECK(cusparseSpMM(
         handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
         CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, lhs, rhs, &beta, target,
-        CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, buffer.data_ptr<float>()
+        CUDA_R_32F, CUSPARSE_SPMM_CSR_ALG3, buffer.data_ptr<float>()
     ));
 
     //

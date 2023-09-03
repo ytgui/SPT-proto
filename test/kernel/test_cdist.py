@@ -7,7 +7,7 @@ from naive_gpt import kernels
 
 def test_cdist():
     d_code = random.choice([4, 8, 16])
-    n_queries = 64 * random.randint(1, 16)
+    n_queries = 64 * random.randint(1, 64)
     n_codewords = 64 * random.randint(1, 16)
     n_subspaces = random.randint(1, 16)
     cuda_device = 'cuda'

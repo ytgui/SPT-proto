@@ -78,10 +78,6 @@ __global__ void cdist_backward_kernel(
         // reduce
         vector_t reduced = {};
         for (index_t offset_x = 0; offset_x < n_codewords; offset_x += BSZ) {
-            // y = torch.matmul(query, table.T)
-            // grad_q = torch.matmul(grad_y, table)
-            // grad_table = torch.matmul(grad_y.T, x)
-
             // cache
             __shared__ vector_t cache_b[BSZ];
             __shared__ scalar_t cache_grad[BSZ][BSZ];
@@ -93,7 +89,7 @@ __global__ void cdist_backward_kernel(
             for (index_t tx = 0; tx < BSZ; tx += TSZ) {
                 *(vector_t *)&cache_grad[ty][tx] = __ldg(
                     (const vector_t *)&grad_output[
-                        gz * n_queries * n_codewords + (offset_x + ty) * n_queries + (offset_x + tx)
+                        gz * n_queries * n_codewords + gy * n_codewords + (offset_x + tx)
                     ]
                 );
             }

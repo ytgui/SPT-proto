@@ -30,6 +30,12 @@ torch::Tensor softmax_forward_cuda(
     const torch::Tensor &values
 );
 
+torch::Tensor softmax_backward_cuda(
+    const torch::Tensor &indptr, const torch::Tensor &indices,
+    const torch::Tensor &values, const torch::Tensor &output,
+    const torch::Tensor &grad_output
+);
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // cdist
     m.def("cdist_forward_cuda", &cdist_forward_cuda, "cdist forward");
@@ -40,4 +46,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("sddmm_forward_cuda", &sddmm_forward_cuda, "sddmm forward");
     // softmax
     m.def("softmax_forward_cuda", &softmax_forward_cuda, "softmax forward");
+    m.def("softmax_backward_cuda", &softmax_backward_cuda, "softmax backward");
 }

@@ -9,17 +9,26 @@ class Softmax(autograd.Function):
                 indptr: torch.Tensor,
                 indices: torch.Tensor,
                 values: torch.Tensor):
+        output = ext.softmax_forward_cuda(
+            indptr, indices, values
+        )
         ctx.save_for_backward(
-            indptr, indices, values
+            indptr, indices, values, output
         )
-        return ext.softmax_forward_cuda(
-            indptr, indices, values
-        )
+        return output
 
     @staticmethod
     def backward(ctx,
                  grad_output: torch.Tensor):
-        raise NotImplementedError
+        indptr = ctx.saved_tensors[0]
+        indices = ctx.saved_tensors[1]
+        values = ctx.saved_tensors[2]
+        output = ctx.saved_tensors[3]
+        grad_values = ext.softmax_backward_cuda(
+            indptr, indices, values, output,
+            grad_output.contiguous()
+        )
+        return None, None, grad_values
 
 
 def softmax(indptr: torch.Tensor,

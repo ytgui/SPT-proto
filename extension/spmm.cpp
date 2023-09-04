@@ -1,6 +1,7 @@
 #include "common.h"
 
 torch::Tensor spmm_forward_cuda(
+    const torch::Tensor transpose_lhs, const torch::Tensor transpose_rhs,
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &values, const torch::Tensor &x
 ) {
@@ -37,19 +38,25 @@ torch::Tensor spmm_forward_cuda(
     ));
     auto handle = at::cuda::getCurrentCUDASparseHandle();
 
+    // transpose
+    auto op_lhs = (transpose_lhs.item<bool>())
+                      ? CUSPARSE_OPERATION_TRANSPOSE
+                      : CUSPARSE_OPERATION_NON_TRANSPOSE;
+    auto op_rhs = (transpose_rhs.item<bool>())
+                      ? CUSPARSE_OPERATION_TRANSPOSE
+                      : CUSPARSE_OPERATION_NON_TRANSPOSE;
+
     // cu_sparse
     size_t external_size;
     float alpha = 1.0, beta = 0.0;
     CUSPARSE_CHECK(cusparseSpMM_bufferSize(
-        handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-        CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, lhs, rhs, &beta, target,
-        CUDA_R_32F, CUSPARSE_SPMM_CSR_ALG3, &external_size
+        handle, op_lhs, op_rhs, &alpha, lhs, rhs, &beta, target, CUDA_R_32F,
+        CUSPARSE_SPMM_CSR_ALG3, &external_size
     ));
     auto buffer = torch::zeros({external_size}, x.options());
     CUSPARSE_CHECK(cusparseSpMM(
-        handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-        CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, lhs, rhs, &beta, target,
-        CUDA_R_32F, CUSPARSE_SPMM_CSR_ALG3, buffer.data_ptr<float>()
+        handle, op_lhs, op_rhs, &alpha, lhs, rhs, &beta, target, CUDA_R_32F,
+        CUSPARSE_SPMM_CSR_ALG3, buffer.data_ptr<float>()
     ));
 
     //

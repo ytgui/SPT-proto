@@ -10,7 +10,9 @@ class SPMM(autograd.Function):
                 indices: torch.Tensor,
                 values: torch.Tensor,
                 x: torch.Tensor):
+        s_false = torch.scalar_tensor(False)
         return ext.spmm_forward_cuda(
+            s_false, s_false,
             indptr, indices, values, x
         )
 

@@ -14,8 +14,9 @@ std::vector<torch::Tensor> cdist_backward_cuda(
 );
 
 torch::Tensor spmm_forward_cuda(
+    const torch::Tensor trans_lhs, const torch::Tensor trans_rhs,
     const torch::Tensor &indptr, const torch::Tensor &indices,
-    const torch::Tensor &values, const torch::Tensor &value
+    const torch::Tensor &values, const torch::Tensor &x
 );
 
 torch::Tensor sddmm_forward_cuda(

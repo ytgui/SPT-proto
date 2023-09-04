@@ -27,9 +27,6 @@ def test_sddmm():
     sparse_mask = mask.to_sparse_csr()
     indptr = sparse_mask.crow_indices()
     indices = sparse_mask.col_indices()
-    rev_sparse = rev_mask.to_sparse_csr()
-    rev_indptr = rev_sparse.crow_indices()
-    rev_indices = rev_sparse.col_indices()
 
     # query
     q = torch.randn(
@@ -92,7 +89,8 @@ def bench_sddmm():
         device=cuda_device
     )
     topk = torch.topk(
-        prob, k=seq_length // 8, dim=-1
+        prob, k=seq_length // 8, dim=-1,
+        sorted=False
     )
     mask = torch.scatter(
         torch.zeros_like(prob),

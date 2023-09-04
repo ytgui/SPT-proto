@@ -20,6 +20,7 @@ torch::Tensor spmm_forward_cuda(
 );
 
 torch::Tensor sddmm_forward_cuda(
+    const torch::Tensor trans_lhs, const torch::Tensor trans_rhs,
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &query, const torch::Tensor &key
 );

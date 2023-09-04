@@ -1,7 +1,7 @@
 #include "common.h"
 
 torch::Tensor spmm_forward_cuda(
-    const torch::Tensor transpose_lhs, const torch::Tensor transpose_rhs,
+    const torch::Tensor trans_lhs, const torch::Tensor trans_rhs,
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &values, const torch::Tensor &x
 ) {
@@ -39,12 +39,10 @@ torch::Tensor spmm_forward_cuda(
     auto handle = at::cuda::getCurrentCUDASparseHandle();
 
     // transpose
-    auto op_lhs = (transpose_lhs.item<bool>())
-                      ? CUSPARSE_OPERATION_TRANSPOSE
-                      : CUSPARSE_OPERATION_NON_TRANSPOSE;
-    auto op_rhs = (transpose_rhs.item<bool>())
-                      ? CUSPARSE_OPERATION_TRANSPOSE
-                      : CUSPARSE_OPERATION_NON_TRANSPOSE;
+    auto op_lhs = (trans_lhs.item<bool>()) ? CUSPARSE_OPERATION_TRANSPOSE
+                                           : CUSPARSE_OPERATION_NON_TRANSPOSE;
+    auto op_rhs = (trans_rhs.item<bool>()) ? CUSPARSE_OPERATION_TRANSPOSE
+                                           : CUSPARSE_OPERATION_NON_TRANSPOSE;
 
     // cu_sparse
     size_t external_size;

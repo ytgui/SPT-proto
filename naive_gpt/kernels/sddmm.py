@@ -14,8 +14,11 @@ class SDDMM(autograd.Function):
             indptr, indices,
             query, key
         )
+        s_true = torch.scalar_tensor(True)
+        s_false = torch.scalar_tensor(False)
         return ext.sddmm_forward_cuda(
-            indptr, indices, query, key
+            s_false, s_true, indptr,
+            indices, query, key
         )
 
     @staticmethod
@@ -28,13 +31,14 @@ class SDDMM(autograd.Function):
         #
         s_true = torch.scalar_tensor(True)
         s_false = torch.scalar_tensor(False)
+        grad_output = grad_output.contiguous()
         grad_key = ext.spmm_forward_cuda(
             s_true, s_false, indptr, indices,
-            grad_output.contiguous(), query
+            grad_output, query
         )
         grad_query = ext.spmm_forward_cuda(
             s_false, s_false, indptr, indices,
-            grad_output.contiguous(), key
+            grad_output, key
         )
         return None, None, grad_query, grad_key
 

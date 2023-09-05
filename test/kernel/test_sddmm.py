@@ -99,39 +99,10 @@ def test_sddmm():
 
 
 def bench_sddmm():
-    d_model = 64
-    seq_length = 1024
-    cuda_device = 'cuda'
-
-    # mask
-    prob = torch.rand(
-        [seq_length, seq_length],
-        device=cuda_device
+    mask, topk, sparse, q, k = get_input(
+        64, seq_length=1024, n_features=64
     )
-    topk = torch.topk(
-        prob, k=seq_length // 8, dim=-1,
-        sorted=False
-    )
-    mask = torch.scatter(
-        torch.zeros_like(prob),
-        dim=-1, index=topk.indices,
-        src=torch.ones_like(topk.values)
-    )
-    sparse_mask = mask.to_sparse_csr()
-    indptr = sparse_mask.crow_indices()
-    indices = sparse_mask.col_indices()
-    indices = indices.type(torch.int32)
-    indptr = indptr.type(torch.int32)
-
-    # query
-    q = torch.randn(
-        [seq_length, d_model], requires_grad=True,
-        device=cuda_device
-    )
-    k = torch.randn(
-        [seq_length, d_model], requires_grad=True,
-        device=cuda_device
-    )
+    indptr, indices, values = sparse
 
     # dense
     time.sleep(2.0)
@@ -141,27 +112,11 @@ def bench_sddmm():
     ) as prof:
         for _ in range(200):
             y_1 = torch.multiply(
-                mask, torch.matmul(q, k.T)
+                mask, torch.matmul(
+                    q, k.transpose(-1, -2)
+                )
             )
             torch.sum(y_1).backward()
-    print(
-        prof.key_averages().table(
-            sort_by='cuda_time_total', row_limit=5
-        )
-    )
-
-    # sparse
-    time.sleep(2.0)
-    with profiler.profile(
-        activities=[profiler.ProfilerActivity.CUDA],
-        profile_memory=True, with_flops=True
-    ) as prof:
-        for _ in range(200):
-            q.grad, k.grad = None, None
-            y_2 = torch.sparse.sampled_addmm(
-                sparse_mask, q, k.T, alpha=1.0, beta=0.0
-            )
-            torch.sum(y_2).backward()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -175,11 +130,10 @@ def bench_sddmm():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(200):
-            q.grad, k.grad = None, None
-            y_3 = kernels.sddmm(
-                indptr=indptr, indices=indices, query=q, key=k
+            y_2 = kernels.sddmm(
+                indptr, indices, query=q, key=k
             )
-            torch.sum(y_3).backward()
+            torch.sum(y_2).backward()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

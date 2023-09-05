@@ -5,74 +5,94 @@ from torch import profiler
 from naive_gpt import kernels
 
 
-def test_sddmm():
-    d_model = 16 * random.randint(1, 16)
-    seq_length = 64 * random.randint(1, 64)
-    cuda_device = 'cuda'
+def get_input(batch_size: int,
+              seq_length: int,
+              n_features: int):
+    device = 'cuda'
 
     # mask
     prob = torch.rand(
-        [seq_length, seq_length],
-        device=cuda_device
+        [batch_size, seq_length, seq_length],
+        requires_grad=True, device=device
     )
     topk = torch.topk(
-        prob, k=seq_length // 4, dim=-1
+        prob, k=seq_length // 8, dim=-1,
+        largest=True, sorted=False
     )
     mask = torch.scatter(
         torch.zeros_like(prob),
         dim=-1, index=topk.indices,
         src=torch.ones_like(topk.values)
     )
-    rev_mask = mask.transpose(-1, -2)
-    sparse_mask = mask.to_sparse_csr()
-    indptr = sparse_mask.crow_indices()
-    indices = sparse_mask.col_indices()
 
-    # query
+    # sort indices
+    order = torch.argsort(
+        topk.indices, dim=-1
+    )
+    topk_indices = torch.gather(
+        topk.indices, dim=-1, index=order
+    )
+    topk_values = torch.gather(
+        topk.values, dim=-1, index=order
+    )
+
+    # sparse
+    sparse = mask.to_sparse_csr()
+    indptr = sparse.crow_indices()
+    indices = sparse.col_indices()
+    indptr = indptr.type(torch.int32)
+    indices = indices.type(torch.int32)
+
+    #
     q = torch.randn(
-        [seq_length, d_model], requires_grad=True,
-        device=cuda_device
+        [batch_size, seq_length, n_features],
+        requires_grad=True, device=device
     )
     k = torch.randn(
-        [seq_length, d_model], requires_grad=True,
-        device=cuda_device
+        [batch_size, seq_length, n_features],
+        requires_grad=True, device=device
     )
+    return mask, [topk_indices, topk_values], [
+        indptr, indices, sparse.values()
+    ], q, k
+
+
+def test_sddmm():
+    mask, topk, sparse, q, k = get_input(
+        batch_size=random.randint(1, 16),
+        seq_length=16 * random.randint(1, 16),
+        n_features=16 * random.randint(1, 4)
+    )
+    topk_indices, topk_values = topk
+    indptr, indices, values = sparse
 
     # matmul
     y_1 = torch.multiply(
-        mask, torch.matmul(q, k.T)
+        mask, torch.matmul(
+            q, k.transpose(-1, -2)
+        )
     )
+    y_1 = torch.gather(
+        y_1, dim=-1, index=topk_indices
+    )
+    y_1 = torch.flatten(y_1, start_dim=1)
     torch.sum(y_1).backward()
     grad_q_1 = q.grad.detach().clone()
     grad_k_1 = k.grad.detach().clone()
 
-    # torch.sparse
+    # kernel
     q.grad, k.grad = None, None
-    y_2 = torch.sparse.sampled_addmm(
-        sparse_mask, q, k.T, alpha=1.0, beta=0.0
+    y_2: torch.Tensor = kernels.sddmm(
+        indptr, indices, query=q, key=k
     )
     torch.sum(y_2).backward()
     grad_q_2 = q.grad.detach().clone()
     grad_k_2 = k.grad.detach().clone()
 
-    # kernel
-    q.grad, k.grad = None, None
-    y_3: torch.Tensor = kernels.sddmm(
-        indptr=indptr.type(torch.int32),
-        indices=indices.type(torch.int32),
-        query=q, key=k
-    )
-    torch.sum(y_3).backward()
-    grad_q_3 = q.grad.detach().clone()
-    grad_k_3 = k.grad.detach().clone()
-
     # check
-    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
-    assert torch.allclose(y_2.values(), y_3, atol=1e-3)
+    assert torch.allclose(y_1, y_2, atol=1e-3)
     assert torch.allclose(grad_q_1, grad_q_2, atol=1e-3)
-    assert torch.allclose(grad_q_1, grad_q_3, atol=1e-3)
     assert torch.allclose(grad_k_1, grad_k_2, atol=1e-3)
-    assert torch.allclose(grad_k_1, grad_k_3, atol=1e-3)
 
     #
     print('[PASS] test_sddmm()')

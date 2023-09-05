@@ -52,6 +52,7 @@ def test_softmax():
         seq_length=64 * random.randint(1, 16)
     )
     topk_indices, topk_values = topk
+    indptr, indices, values = sparse
 
     # torch
     dense = torch.scatter(
@@ -74,10 +75,7 @@ def test_softmax():
     grad_1 = torch.flatten(grad_1, start_dim=1)
 
     # kernel
-    indptr, indices, values = sparse
-    values = torch.clone(
-        values.detach()
-    )
+    values = values.detach().clone()
     values.requires_grad = True
     y_2 = kernels.softmax(
         indptr, indices, values
@@ -107,9 +105,7 @@ def bench_softmax():
     dense = dense.detach().clone()
     dense.requires_grad = True
     indptr, indices, values = sparse
-    values = torch.clone(
-        values.detach()
-    )
+    values = values.detach().clone()
     values.requires_grad = True
 
     # torch

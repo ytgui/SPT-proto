@@ -5,38 +5,51 @@ torch::Tensor sddmm_forward_cuda(
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &query, const torch::Tensor &key
 ) {
-    CHECK_DIM(key, 2);
-    CHECK_DIM(query, 2);
-    CHECK_DIM(indptr, 1);
-    CHECK_DIM(indices, 1);
+    CHECK_DIM(key, 3);
+    CHECK_DIM(query, 3);
+    CHECK_DIM(indptr, 2);
+    CHECK_DIM(indices, 2);
     CHECK_TYPE(indptr, torch::kInt32);
     CHECK_TYPE(indices, torch::kInt32);
     TORCH_CHECK(query.sizes() == key.sizes());
+    TORCH_CHECK(query.size(0) == indptr.size(0));
+    TORCH_CHECK(query.size(0) == indices.size(0));
     TORCH_CHECK(query.scalar_type() == key.scalar_type());
 
     // sizes
     index_t d_head = query.size(-1);
-    index_t seq_length = query.size(0);
-    TORCH_CHECK(indptr.size(0) == seq_length + 1);
+    index_t batch_size = query.size(0);
+    index_t seq_length = query.size(1);
+    index_t nonzeros = indices.size(-1);
+    TORCH_CHECK(indptr.size(1) == seq_length + 1);
     auto output = torch::zeros_like(indices, query.options());
 
     // format
     cusparseSpMatDescr_t target;
     cusparseDnMatDescr_t lhs, rhs;
     CUSPARSE_CHECK(cusparseCreateDnMat(
-        &lhs, query.size(0), query.size(-1), query.size(-1),
-        query.data_ptr<float>(), CUDA_R_32F, CUSPARSE_ORDER_ROW
+        &lhs, seq_length, d_head, d_head, query.data_ptr<float>(), CUDA_R_32F,
+        CUSPARSE_ORDER_ROW
     ));
+    CUSPARSE_CHECK(
+        cusparseDnMatSetStridedBatch(lhs, batch_size, seq_length * d_head)
+    );
     CUSPARSE_CHECK(cusparseCreateDnMat(
-        &rhs, key.size(0), key.size(-1), key.size(-1), key.data_ptr<float>(),
-        CUDA_R_32F, CUSPARSE_ORDER_ROW
+        &rhs, seq_length, d_head, d_head, key.data_ptr<float>(), CUDA_R_32F,
+        CUSPARSE_ORDER_ROW
     ));
+    CUSPARSE_CHECK(
+        cusparseDnMatSetStridedBatch(rhs, batch_size, seq_length * d_head)
+    );
     CUSPARSE_CHECK(cusparseCreateCsr(
-        &target, query.size(0), key.size(0), indices.size(0),
-        indptr.data_ptr<index_t>(), indices.data_ptr<index_t>(),
-        output.data_ptr<float>(), CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
-        CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F
+        &target, seq_length, seq_length, nonzeros, indptr.data_ptr<index_t>(),
+        indices.data_ptr<index_t>(), output.data_ptr<float>(),
+        CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO,
+        CUDA_R_32F
     ));
+    CUSPARSE_CHECK(
+        cusparseCsrSetStridedBatch(target, batch_size, seq_length + 1, nonzeros)
+    );
     auto handle = at::cuda::getCurrentCUDASparseHandle();
 
     // transpose

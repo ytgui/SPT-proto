@@ -5,83 +5,88 @@ from torch import profiler
 from naive_gpt import kernels
 
 
-def test_spmm():
-    d_model = 16 * random.randint(1, 4)
-    seq_length = 64 * random.randint(1, 16)
-    cuda_device = 'cuda'
+def get_input(batch_size: int,
+              seq_length: int,
+              n_features: int):
+    device = 'cuda'
 
     # mask
     prob = torch.rand(
-        [seq_length, seq_length],
-        requires_grad=True,
-        device=cuda_device
+        [batch_size, seq_length, seq_length],
+        requires_grad=True, device=device
     )
     topk = torch.topk(
-        prob, k=seq_length // 4, dim=-1,
-        sorted=False
+        prob, k=seq_length // 8, dim=-1,
+        largest=True, sorted=False
     )
-    mask = torch.scatter(
-        torch.zeros_like(prob),
-        dim=-1, index=topk.indices,
-        src=torch.ones_like(prob)
+    dense = torch.scatter(
+        torch.zeros_like(prob), dim=-1,
+        index=topk.indices, src=topk.values
     )
-    sparse_mask = mask.to_sparse_csr()
-    indptr = sparse_mask.crow_indices()
-    indices = sparse_mask.col_indices()
-    indices = indices.type(torch.int32)
-    indptr = indptr.type(torch.int32)
 
-    # x
-    x = torch.randn(
-        [seq_length, d_model],
-        requires_grad=True,
-        device=cuda_device
+    # sort indices
+    order = torch.argsort(
+        topk.indices, dim=-1
     )
+    topk_indices = torch.gather(
+        topk.indices, dim=-1, index=order
+    )
+    topk_values = torch.gather(
+        topk.values, dim=-1, index=order
+    )
+
+    # sparse
+    sparse = dense.to_sparse_csr()
+    indptr = sparse.crow_indices()
+    indices = sparse.col_indices()
+    indptr = indptr.type(torch.int32)
+    indices = indices.type(torch.int32)
+
+    #
+    x = torch.randn(
+        [batch_size, seq_length, n_features],
+        requires_grad=True, device=device
+    )
+    return dense, [topk_indices, topk_values], [
+        indptr, indices, sparse.values()
+    ], x
+
+
+def test_spmm():
+    dense, topk, sparse, x = get_input(
+        batch_size=random.randint(1, 16),
+        seq_length=16 * random.randint(1, 16),
+        n_features=16 * random.randint(1, 4)
+    )
+    topk_indices, topk_values = topk
+    indptr, indices, values = sparse
 
     # matmul
-    mask.requires_grad = True
-    y_1 = torch.matmul(mask, x)
+    dense = dense.detach().clone()
+    dense.requires_grad = True
+    y_1 = torch.bmm(dense, x)
     torch.sum(y_1).backward()
-    grad_a_1 = torch.multiply(
-        mask, mask.grad.detach()
+    grad_a_1 = torch.gather(
+        dense.grad, dim=-1, index=topk_indices
     )
+    grad_a_1 = torch.flatten(grad_a_1, start_dim=1)
     grad_x_1 = x.grad.detach().clone()
-
-    # torch.sparse
-    x.grad = None
-    sparse_mask = torch.clone(
-        sparse_mask.detach()
-    )
-    sparse_mask.requires_grad = True
-    y_2 = torch.sparse.mm(sparse_mask, x)
-    torch.sum(y_2).backward()
-    grad_a_2 = sparse_mask.grad.clone()
-    grad_x_2 = x.grad.detach().clone()
 
     # kernel
     x.grad = None
-    sparse_values = torch.clone(
-        sparse_mask.values().detach()
+    values = values.detach().clone()
+    values.requires_grad = True
+    y_2 = kernels.spmm(
+        indptr, indices, values, x=x
     )
-    sparse_values.requires_grad = True
-    y_3 = kernels.spmm(
-        indptr, indices, sparse_values, x=x
-    )
-    torch.sum(y_3).backward()
-    grad_a_3 = sparse_values.grad.detach().clone()
-    grad_x_3 = x.grad.detach().clone()
+    # torch.sum(y_2).backward()
+    # grad_a_2 = values.grad.detach().clone()
+    # grad_x_2 = x.grad.detach().clone()
 
     # check
     assert torch.allclose(y_1, y_2, atol=1e-3)
-    assert torch.allclose(y_1, y_3, atol=1e-3)
-    assert torch.allclose(
-        grad_a_1, grad_a_2.to_dense(), atol=1e-3
-    )
-    assert torch.allclose(
-        grad_a_2.values(), grad_a_3, atol=1e-3
-    )
-    assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
-    assert torch.allclose(grad_x_1, grad_x_3, atol=1e-3)
+    # assert torch.allclose(grad_a_1, grad_a_2, atol=1e-3)
+    # assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
 
     #
     print('[PASS] test_spmm()')

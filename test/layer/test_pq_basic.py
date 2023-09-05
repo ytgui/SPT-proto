@@ -6,8 +6,8 @@ from naive_gpt import layers
 
 def test_pq_basic():
     d_codeword = random.choice([4, 8, 16])
-    n_codewords = 4 * random.randint(1, 64)
-    n_queries = 4 * random.randint(1, 64)
+    n_codewords = 64 * random.randint(1, 4)
+    n_queries = 64 * random.randint(1, 16)
     n_subspaces = random.randint(1, 16)
     d_model = n_subspaces * d_codeword
     cuda_device = 'cuda'

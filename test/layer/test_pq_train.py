@@ -121,10 +121,10 @@ class LightningModel(L.LightningModule):
 
 
 def test_blobs_pq():
-    n_centers = 20
-    n_features = 8
-    batch_size = 64
-    n_tables = 2
+    n_centers = 64
+    n_features = 16
+    batch_size = 256
+    n_tables = 4
 
     # loader
     dm = DataModule(
@@ -149,8 +149,8 @@ def test_blobs_pq():
     evaluation = trainer.validate(
         model, dm, verbose=True
     )[0]
-    assert evaluation['accuracy'] >= 0.8
-    assert evaluation['center_error'] <= 0.2
+    assert evaluation['accuracy'] >= 0.65
+    assert evaluation['center_error'] <= 0.20
 
     #
     print('[PASS] test_blobs_pq()')

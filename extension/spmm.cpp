@@ -1,7 +1,7 @@
 #include "common.h"
 
 torch::Tensor spmm_forward_cuda(
-    const torch::Tensor trans_lhs, const torch::Tensor trans_rhs,
+    const torch::Tensor &trans_lhs, const torch::Tensor &trans_rhs,
     const torch::Tensor &indptr, const torch::Tensor &indices,
     const torch::Tensor &values, const torch::Tensor &x
 ) {
@@ -25,8 +25,8 @@ torch::Tensor spmm_forward_cuda(
     auto output = torch::zeros_like(x);
 
     // format
-    cusparseSpMatDescr_t lhs;
-    cusparseDnMatDescr_t rhs, target;
+    cusparseSpMatDescr_t lhs = {};
+    cusparseDnMatDescr_t rhs = {}, target = {};
     CUSPARSE_CHECK(cusparseCreateCsr(
         &lhs, seq_length, seq_length, nonzeros, indptr.data_ptr<index_t>(),
         indices.data_ptr<index_t>(), values.data_ptr<float>(),

@@ -5,15 +5,50 @@ from torch import profiler
 from naive_gpt import kernels
 
 
+from torch import autograd
+from naive_gpt import ext
+
+
+class BLKMV(autograd.Function):
+    @staticmethod
+    def forward(ctx,
+                config: torch.Tensor,
+                dense: torch.Tensor,
+                indptr: torch.Tensor,
+                indices: torch.Tensor,
+                x: torch.Tensor):
+        ctx.save_for_backward(
+            config, dense, indptr, indices, x
+        )
+        return ext.blkmv_forward_cuda(
+            config, dense, indptr, indices, x
+        )
+
+    @staticmethod
+    def backward(ctx,
+                 grad_output: torch.Tensor):
+        raise NotImplementedError
+
+
+def blkmv(config: torch.Tensor,
+          dense: torch.Tensor,
+          indptr: torch.Tensor,
+          indices: torch.Tensor,
+          x: torch.Tensor):
+    return BLKMV.apply(
+        config, dense, indptr, indices, x
+    )
+
+
 def get_input(in_blocks: int,
               out_blocks: int,
               block_size: int):
-    device = 'cpu'
+    cuda_device = 'cuda'
 
     # mask
     prob = torch.rand(
         [out_blocks, in_blocks],
-        device=device
+        device=cuda_device
     )
     topk = torch.topk(
         prob, k=in_blocks // 4,
@@ -31,59 +66,48 @@ def get_input(in_blocks: int,
     sparse_mask = mask.to_sparse_csr()
     csr_indices = sparse_mask.col_indices()
     csr_indptr = sparse_mask.crow_indices()
+    indptr = csr_indptr.cpu().type(torch.int32)
+    indices = csr_indices.cpu().type(torch.int32)
 
     #
     dense = torch.randn(
-        [out_blocks * block_size,
-         in_blocks * block_size]
-    )
-    blocks = [
-        dense[
-            y * block_size:(y + 1) * block_size,
-            x * block_size:(x + 1) * block_size]
-        for y in range(out_blocks) for x in range(in_blocks)
-    ]
-    blocks = torch.stack(blocks, dim=0)
-    blocks = blocks.view(
-        [out_blocks, in_blocks, block_size, block_size]
-    )
-    bsr_tensor = torch.sparse_bsr_tensor(
-        csr_indptr, csr_indices, values=blocks[mask]
+        [out_blocks * block_size, in_blocks * block_size],
+        device=cuda_device
     )
 
     #
-    mask = mask.view(
-        [out_blocks, in_blocks]
-    ).type(torch.float)
-    mask = mask.repeat_interleave(
-        repeats=block_size, dim=-1
-    )
-    mask = mask.repeat_interleave(
-        repeats=block_size, dim=-2
-    )
+    mask = mask.type(torch.float)
+    mask = mask.repeat_interleave(block_size, dim=-1)
+    mask = mask.repeat_interleave(block_size, dim=-2)
     x = torch.randn(
-        [in_blocks * block_size, 1],
-        device=device
+        [in_blocks * block_size], device=cuda_device
     )
 
     #
-    return mask, dense, bsr_tensor, x
+    return mask, dense, [indptr, indices], x
 
 
 def test_blkmv():
+    in_blocks = 4 # * random.randint(1, 4)
+    out_blocks = 2 # * random.randint(1, 4)
+    block_size = 2  # * random.randint(1, 4)
     mask, dense, sparse, x = get_input(
-        in_blocks=4 * random.randint(1, 4),
-        out_blocks=4 * random.randint(1, 4),
-        block_size=4 * random.randint(1, 4)
+        in_blocks=in_blocks,
+        out_blocks=out_blocks,
+        block_size=block_size
     )
+    indptr, indices = sparse
 
     # dense
     y_1 = torch.matmul(
         torch.multiply(mask, dense), x
     )
 
-    # sparse
-    y_2 = torch.sparse.mm(sparse, x)
+    # custom
+    config = torch.empty(
+        [out_blocks, in_blocks, block_size]
+    )
+    y_2 = blkmv(config, dense, indptr, indices, x)
 
     # check
     assert torch.allclose(y_1, y_2, atol=1e-3)
@@ -134,7 +158,7 @@ def bench_blkmv():
 
 def main():
     test_blkmv()
-    bench_blkmv()
+    # bench_blkmv()
 
 
 if __name__ == '__main__':

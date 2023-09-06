@@ -46,16 +46,15 @@ torch::Tensor blkmv_forward_cuda(
     const auto indptr_ptr = indptr.accessor<index_t, 1>();
     const auto indices_ptr = indices.accessor<index_t, 1>();
     for (auto row = 0; row < out_blocks; row += 1) {
+        const auto y_i = &y_ptr[row * block_size];
+        //
         for (index_t i = indptr_ptr[row]; i < indptr_ptr[row + 1]; i += 1) {
             index_t col = indices_ptr[i];
             //
             const auto x_i = &x_ptr[col * block_size];
-            const auto y_i = &y_ptr[row * block_size];
-            // clang-format off
             const auto w_i = &dense_ptr[
-                row * in_blocks * block_size + col * block_size
+                row * block_size * in_blocks * block_size + col * block_size
             ];
-            // clang-format on
             CUBLAS_CHECK(cublasSgemv(
                 handle, CUBLAS_OP_T, block_size, block_size, &alpha, w_i,
                 in_blocks * block_size, x_i, 1, &beta, y_i, 1

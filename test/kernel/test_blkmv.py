@@ -7,12 +7,13 @@ from naive_gpt import kernels
 
 def get_input(in_blocks: int,
               out_blocks: int,
-              block_size: int):
+              block_size: int,
+              batch_size: int):
     cuda_device = 'cuda'
 
     # mask
     prob = torch.rand(
-        [out_blocks, in_blocks],
+        [batch_size, out_blocks, in_blocks],
         device=cuda_device
     )
     topk = torch.topk(
@@ -45,37 +46,38 @@ def get_input(in_blocks: int,
     mask = mask.repeat_interleave(block_size, dim=-1)
     mask = mask.repeat_interleave(block_size, dim=-2)
     x = torch.randn(
-        [in_blocks * block_size], requires_grad=True,
-        device=cuda_device
+        [batch_size, in_blocks * block_size],
+        requires_grad=True, device=cuda_device
+    )
+    config = torch.empty(
+        [out_blocks, in_blocks, block_size]
     )
 
     #
-    return mask, dense, [indptr, indices], x
+    return config, mask, dense, [indptr, indices], x
 
 
 def test_blkmv():
-    in_blocks = 4 * random.randint(1, 4)
-    out_blocks = 4 * random.randint(1, 4)
-    block_size = 4 * random.randint(1, 4)
-    mask, dense, sparse, x = get_input(
-        in_blocks=in_blocks,
-        out_blocks=out_blocks,
-        block_size=block_size
+    config, mask, dense, sparse, x = get_input(
+        in_blocks=4 * random.randint(1, 4),
+        out_blocks=4 * random.randint(1, 4),
+        block_size=4 * random.randint(1, 4),
+        batch_size=random.randint(1, 16)
     )
     indptr, indices = sparse
 
     # dense
     y_1 = torch.matmul(
-        torch.multiply(mask, dense), x
+        torch.multiply(
+            mask, dense.unsqueeze(0)
+        ), x.unsqueeze(-1)
     )
+    y_1 = y_1.squeeze(-1)
     torch.sum(y_1).backward()
     grad_x_1 = x.grad.detach().clone()
 
     # custom
     x.grad = None
-    config = torch.empty(
-        [out_blocks, in_blocks, block_size]
-    )
     y_2 = kernels.blkmv(
         config, dense, indptr, indices, x
     )

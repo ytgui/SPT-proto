@@ -38,7 +38,7 @@ def get_input(in_blocks: int,
     #
     dense = torch.randn(
         [out_blocks * block_size, in_blocks * block_size],
-        device=cuda_device
+        requires_grad=True, device=cuda_device
     )
 
     #
@@ -74,18 +74,22 @@ def test_blkmv():
     )
     y_1 = y_1.squeeze(-1)
     torch.sum(y_1).backward()
+    grad_w_1 = dense.grad.detach().clone()
     grad_x_1 = x.grad.detach().clone()
 
     # custom
     x.grad = None
+    dense.grad = None
     y_2 = kernels.blkmv(
         config, dense, indptr, indices, x
     )
     torch.sum(y_2).backward()
+    grad_w_2 = dense.grad.detach().clone()
     grad_x_2 = x.grad.detach().clone()
 
     # check
     assert torch.allclose(y_1, y_2, atol=1e-3)
+    assert torch.allclose(grad_w_1, grad_w_2, atol=1e-3)
     assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
 
     #

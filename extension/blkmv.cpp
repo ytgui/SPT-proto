@@ -138,5 +138,38 @@ std::vector<torch::Tensor> blkmv_backward_cuda(
     }
 
     //
+    auto device = x.device();
+    for (auto row = 0; row < out_blocks; row += 1) {
+        std::vector<std::vector<index_t>> batch_list(in_blocks);
+        for (auto b = 0; b < batch_size; b += 1) {
+            for (index_t i = indptr_ptr[b][row]; i < indptr_ptr[b][row + 1]; i += 1) {
+                index_t col = indices_ptr[b][i];
+                batch_list[col].push_back(b);
+            }
+        }
+        //
+        for (index_t col = 0; col < in_blocks; col += 1) {
+            if (batch_list[col].size() <= 0) {
+                continue;
+            }
+            auto index = torch::tensor(batch_list[col]).to(device);
+            auto x_slice = torch::index_select(x, /*dim=*/ 0, index);
+            auto grad_slice = torch::index_select(grad_output, /*dim=*/ 0, index);
+            //
+            x_slice = x_slice.index(
+                {torch::indexing::Slice(), torch::indexing::Slice(col * block_size, (col + 1) * block_size)}
+            );
+            grad_slice = grad_slice.index(
+                {torch::indexing::Slice(), torch::indexing::Slice(row * block_size, (row + 1) * block_size)}
+            );
+            grad_weight.index_put_(
+                {torch::indexing::Slice(row * block_size, (row + 1) * block_size),
+                 torch::indexing::Slice(col * block_size, (col + 1) * block_size)},
+                 torch::matmul(grad_slice.t(), x_slice)
+            );
+        }
+    }
+
+    //
     return {grad_weight, grad_x};
 }

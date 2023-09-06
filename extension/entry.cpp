@@ -42,6 +42,12 @@ torch::Tensor blkmv_forward_cuda(
     const torch::Tensor &x
 );
 
+std::vector<torch::Tensor> blkmv_backward_cuda(
+    const torch::Tensor &config, const torch::Tensor &dense,
+    const torch::Tensor &indptr, const torch::Tensor &indices,
+    const torch::Tensor &x, const torch::Tensor &grad_output
+);
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // cdist
     m.def("cdist_forward_cuda", &cdist_forward_cuda, "cdist forward");
@@ -55,4 +61,5 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("softmax_backward_cuda", &softmax_backward_cuda, "softmax backward");
     // blkmv
     m.def("blkmv_forward_cuda", &blkmv_forward_cuda, "blkmv forward");
+    m.def("blkmv_backward_cuda", &blkmv_backward_cuda, "blkmv backward");
 }

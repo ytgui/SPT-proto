@@ -5,41 +5,6 @@ from torch import profiler
 from naive_gpt import kernels
 
 
-from torch import autograd
-from naive_gpt import ext
-
-
-class BLKMV(autograd.Function):
-    @staticmethod
-    def forward(ctx,
-                config: torch.Tensor,
-                dense: torch.Tensor,
-                indptr: torch.Tensor,
-                indices: torch.Tensor,
-                x: torch.Tensor):
-        ctx.save_for_backward(
-            config, dense, indptr, indices, x
-        )
-        return ext.blkmv_forward_cuda(
-            config, dense, indptr, indices, x
-        )
-
-    @staticmethod
-    def backward(ctx,
-                 grad_output: torch.Tensor):
-        raise NotImplementedError
-
-
-def blkmv(config: torch.Tensor,
-          dense: torch.Tensor,
-          indptr: torch.Tensor,
-          indices: torch.Tensor,
-          x: torch.Tensor):
-    return BLKMV.apply(
-        config, dense, indptr, indices, x
-    )
-
-
 def get_input(in_blocks: int,
               out_blocks: int,
               block_size: int):
@@ -80,7 +45,8 @@ def get_input(in_blocks: int,
     mask = mask.repeat_interleave(block_size, dim=-1)
     mask = mask.repeat_interleave(block_size, dim=-2)
     x = torch.randn(
-        [in_blocks * block_size], device=cuda_device
+        [in_blocks * block_size], requires_grad=True,
+        device=cuda_device
     )
 
     #
@@ -88,9 +54,9 @@ def get_input(in_blocks: int,
 
 
 def test_blkmv():
-    in_blocks = 4 # * random.randint(1, 4)
-    out_blocks = 2 # * random.randint(1, 4)
-    block_size = 2  # * random.randint(1, 4)
+    in_blocks = 4 * random.randint(1, 4)
+    out_blocks = 4 * random.randint(1, 4)
+    block_size = 4 * random.randint(1, 4)
     mask, dense, sparse, x = get_input(
         in_blocks=in_blocks,
         out_blocks=out_blocks,
@@ -102,15 +68,23 @@ def test_blkmv():
     y_1 = torch.matmul(
         torch.multiply(mask, dense), x
     )
+    torch.sum(y_1).backward()
+    grad_x_1 = x.grad.detach().clone()
 
     # custom
+    x.grad = None
     config = torch.empty(
         [out_blocks, in_blocks, block_size]
     )
-    y_2 = blkmv(config, dense, indptr, indices, x)
+    y_2 = kernels.blkmv(
+        config, dense, indptr, indices, x
+    )
+    torch.sum(y_2).backward()
+    grad_x_2 = x.grad.detach().clone()
 
     # check
     assert torch.allclose(y_1, y_2, atol=1e-3)
+    assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
 
     #
     print('[PASS] test_blkmv()')

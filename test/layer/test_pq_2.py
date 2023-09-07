@@ -75,7 +75,7 @@ class LightningModel(L.LightningModule):
         super().__init__()
         #
         self.lr = 1e-2
-        self.weight_decay = 1e-2
+        self.weight_decay = 1e-4
         #
         assert d_model % n_tables == 0
         d_codeword = d_model // n_tables
@@ -83,8 +83,7 @@ class LightningModel(L.LightningModule):
             d_codeword=d_codeword, n_codewords=n_classes,
             n_subspaces=n_tables, method=method
         )
-        self.loss_fn = nn.L1Loss()
-        self.metrics_fn = Accuracy(
+        self.accuracy_fn = Accuracy(
             task='multiclass', num_classes=n_classes
         )
         self.distance_fn = nn.MSELoss()
@@ -101,22 +100,20 @@ class LightningModel(L.LightningModule):
 
     def training_step(self, batch: tuple, batch_idx: int):
         x, center = batch
-        x_q, loss_pq = self.quantizer('train', x)
-        loss_l2 = self.loss_fn(x_q, target=center)
-        self.log('loss_l2', loss_l2, prog_bar=True)
+        loss_pq = self.quantizer('train', x)[-1]
         self.log('loss_pq', loss_pq, prog_bar=True)
-        return loss_l2 + loss_pq
+        return loss_pq
 
     def validation_step(self, batch: tuple, batch_idx: int):
         x, center = batch
-        accuracy = self.metrics_fn(
+        accuracy = self.accuracy_fn(
             self.quantizer('encode', x),
             target=self.quantizer('encode', center)
         )
         center_error = self.distance_fn(
             self.quantizer('quantize', x), target=center
         )
-        self.log('accuracy', accuracy, prog_bar=True)
+        self.log('accuracy@1', accuracy, prog_bar=True)
         self.log('center_error', center_error, prog_bar=True)
 
 
@@ -149,7 +146,7 @@ def test_blobs_pq():
     evaluation = trainer.validate(
         model, dm, verbose=True
     )[0]
-    assert evaluation['accuracy'] >= 0.65
+    assert evaluation['accuracy@1'] >= 0.75
     assert evaluation['center_error'] <= 0.20
 
     #

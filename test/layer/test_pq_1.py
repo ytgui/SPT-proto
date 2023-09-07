@@ -47,7 +47,7 @@ def test_pq_basic():
 
             # train
             y_4, loss = quantizer('train', x)
-            assert torch.allclose(y_4, y_3, atol=1e-3)
+            assert torch.allclose(y_4, y_1, atol=1e-3)
             assert loss.numel() == 1
 
     #

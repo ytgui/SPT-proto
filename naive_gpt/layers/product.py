@@ -107,6 +107,5 @@ class PQ(nn.Module):
         else:
             raise RuntimeError
 
-        # preserve gradient
-        z_q = z + (z_q - z).detach()
-        return z_q, loss
+        #
+        return indices, loss

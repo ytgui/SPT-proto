@@ -1,11 +1,45 @@
 import os
 import torch
+import transformers as T
 from torch import nn, optim
 import pytorch_lightning as L
 from torch.optim import lr_scheduler as lr
 from pytorch_lightning import callbacks
 from naive_gpt import loaders, models
 from torchmetrics import Accuracy
+
+
+def test_opt_logits():
+    # huggingface
+    OptModel = T.OPTForCausalLM
+    opt_1 = OptModel.from_pretrained(
+        'facebook/opt-125m'
+    ).eval()
+
+    # load from ckpt
+    ckpt = torch.load(
+        '.data/opt-125m.ckpt'
+    )
+    config = ckpt['config']
+    opt_2 = models.OPTModel(**config)
+    opt_2.load_state_dict(ckpt['state_dict'])
+    opt_2.eval()
+
+    # check output
+    batch_size = 1
+    seq_length = 256
+    for _ in range(16):
+        x = torch.randint(
+            high=config['vocab_size'],
+            size=[batch_size, seq_length]
+        )
+        y_1, y_2 = opt_1(x)['logits'], opt_2(x)
+        assert torch.allclose(
+            y_1, y_2, atol=1e-5, rtol=1e-3
+        )
+
+    #
+    print('[PASS] test_opt_logits()')
 
 
 class LightningModel(L.LightningModule):
@@ -50,7 +84,7 @@ class LightningModel(L.LightningModule):
         self.log('accuracy', accuracy, prog_bar=True)
 
 
-def train():
+def test_opt_mmlu():
     seq_length = 256
     batch_size = 1
     n_shots = 1
@@ -75,9 +109,13 @@ def train():
     assert evaluation['length'] <= seq_length
     assert evaluation['accuracy'] >= 0.1
 
+    #
+    print('[PASS] test_opt_mmlu()')
+
 
 def main():
-    train()
+    test_opt_logits()
+    test_opt_mmlu()
 
 
 if __name__ == "__main__":

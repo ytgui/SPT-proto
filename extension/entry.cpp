@@ -13,6 +13,11 @@ std::vector<torch::Tensor> cdist_backward_cuda(
     const torch::Tensor &grad_output
 );
 
+torch::Tensor lookup_forward_cuda(
+    const torch::Tensor &config, const torch::Tensor &query,
+    const torch::Tensor &store
+);
+
 torch::Tensor spmm_forward_cuda(
     const torch::Tensor &trans_lhs, const torch::Tensor &trans_rhs,
     const torch::Tensor &indptr, const torch::Tensor &indices,
@@ -52,6 +57,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // cdist
     m.def("cdist_forward_cuda", &cdist_forward_cuda, "cdist forward");
     m.def("cdist_backward_cuda", &cdist_backward_cuda, "cdist backward");
+    // lookup
+    m.def("lookup_forward_cuda", &lookup_forward_cuda, "lookup forward");
     // spmm
     m.def("spmm_forward_cuda", &spmm_forward_cuda, "spmm forward");
     // sddmm

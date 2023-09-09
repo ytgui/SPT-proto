@@ -34,6 +34,7 @@ setup(
                 'extension/blkmv.cpp',
                 'extension/softmax.cu',
                 'extension/cdist.cu',
+                'extension/lookup.cu',
                 'extension/sddmm.cpp',
                 'extension/spmm.cpp'
             ]

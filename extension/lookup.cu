@@ -19,7 +19,7 @@ __global__ void lookup_forward_kernel(
     // cache
     __shared__ index_t cache_query[BSZ][NSZ];
     for (index_t offset_k = 0; offset_k < NSZ; offset_k += TSZ) {
-        *(vector_t *)&cache_query[ty, offset_k] = __ldg(
+        *(vector_t *)&cache_query[ty][offset_k] = __ldg(
             (const vector_t *)&query[
                 gz * seq_length * NSZ + gy * NSZ + offset_k
             ]
@@ -35,7 +35,7 @@ __global__ void lookup_forward_kernel(
         // cache
         __shared__ index_t cache_store[BSZ][NSZ];
         for (index_t offset_k = 0; offset_k < NSZ; offset_k += TSZ) {
-            *(vector_t *)&cache_store[ty, offset_k] = __ldg(
+            *(vector_t *)&cache_store[ty][offset_k] = __ldg(
                 (const vector_t *)&store[
                     gz * seq_length * NSZ + (offset_x + ty) * NSZ + offset_k
                 ]
@@ -59,12 +59,13 @@ __global__ void lookup_forward_kernel(
     // store
     index_t cursor_i = NSZ / 2 - 1, cursor_j = 0;
     for (index_t gx = 0; gx < nonzeros; gx += 1) {
-        output[
-            gz * seq_length * nonzeros + gy * nonzeros + gx
-        ] = cache_indices[cursor_i][cursor_j];
         if (cursor_j >= size_indices[cursor_i]) {
             cursor_i -= 1; cursor_j = 0;
         }
+        output[
+            gz * seq_length * nonzeros + gy * nonzeros + gx
+        ] = cache_indices[cursor_i][cursor_j];
+        cursor_j += 1;
     }
 }
 // clang-format on
@@ -75,8 +76,8 @@ torch::Tensor lookup_forward_cuda(
 ) {
     CHECK_DIM(query, 3);
     CHECK_DIM(store, 3);
-    CHECK_TYPE(query, torch::kFloat32);
-    CHECK_TYPE(store, torch::kFloat32);
+    CHECK_TYPE(query, torch::kInt32);
+    CHECK_TYPE(store, torch::kInt32);
     TORCH_CHECK(query.sizes() == store.sizes());
     TORCH_CHECK(query.scalar_type() == store.scalar_type());
 

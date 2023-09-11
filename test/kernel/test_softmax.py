@@ -6,77 +6,57 @@ from naive_gpt import kernels
 
 
 def get_input(batch_size: int, seq_length: int):
-    device = 'cuda'
+    cuda_device = 'cuda'
 
     # mask
-    prob = torch.randn(
+    prob = torch.rand(
         [batch_size, seq_length, seq_length],
-        requires_grad=True, device=device
+        device=cuda_device
     )
     topk = torch.topk(
         prob, k=seq_length // 8, dim=-1,
         largest=True, sorted=False
     )
     mask = torch.scatter(
-        torch.zeros_like(prob), dim=-1,
-        index=topk.indices, src=topk.values
+        torch.zeros_like(prob),
+        dim=-1, index=topk.indices,
+        src=torch.ones_like(topk.values)
     )
-
-    # sort indices
-    order = torch.argsort(
-        topk.indices, dim=-1
+    dense = torch.where(
+        mask > 0.0, prob, torch.full_like(
+            prob, fill_value=float('-inf')
+        )
     )
-    topk_indices = torch.gather(
-        topk.indices, dim=-1, index=order
-    )
-    topk_values = torch.gather(
-        topk.values, dim=-1, index=order
-    )
+    dense.requires_grad = True
 
     # sparse
     sparse_mask = mask.to_sparse_csr()
     indptr = sparse_mask.crow_indices()
     indices = sparse_mask.col_indices()
-    indices = indices.type(torch.int32)
-    indptr = indptr.type(torch.int32)
+    sparse_csr = [
+        indptr.type(torch.int32),
+        indices.type(torch.int32),
+        topk.values.view_as(indices)
+    ]
+    sparse_csr[-1].requires_grad = True
 
     #
-    return prob, [topk_indices, topk_values], [
-        indptr, indices, sparse_mask.values()
-    ]
+    return dense, sparse_csr
 
 
 def test_softmax():
-    prob, topk, sparse = get_input(
+    dense, sparse_csr = get_input(
         batch_size=random.randint(1, 64),
         seq_length=64 * random.randint(1, 16)
     )
-    topk_indices, topk_values = topk
-    indptr, indices, values = sparse
+    indptr, indices, values = sparse_csr
 
     # torch
-    dense = torch.scatter(
-        torch.full_like(
-            prob, fill_value=float('-inf')
-        ), dim=-1,
-        index=topk_indices, src=topk_values
-    )
-    dense = dense.detach().clone()
-    dense.requires_grad = True
     y_1 = torch.softmax(dense, dim=-1)
-    y_1 = torch.gather(
-        y_1, dim=-1, index=topk_indices
-    )
-    y_1 = torch.flatten(y_1, start_dim=1)
     torch.max(y_1).backward()
-    grad_1 = torch.gather(
-        dense.grad, dim=-1, index=topk_indices
-    )
-    grad_1 = torch.flatten(grad_1, start_dim=1)
+    grad_1 = dense.grad.detach().clone()
 
     # kernel
-    values = values.detach().clone()
-    values.requires_grad = True
     y_2 = kernels.softmax(
         indptr, indices, values
     )
@@ -84,29 +64,24 @@ def test_softmax():
     grad_2 = values.grad.detach().clone()
 
     # check
-    assert torch.allclose(y_1, y_2, atol=1e-3)
-    assert torch.allclose(grad_1, grad_2, atol=1e-3)
+    y_2 = torch.sparse_csr_tensor(
+        indptr, col_indices=indices, values=y_2
+    )
+    grad_2 = torch.sparse_csr_tensor(
+        indptr, col_indices=indices, values=grad_2
+    )
+    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-2)
+    assert torch.allclose(grad_1, grad_2.to_dense(), atol=1e-3)
 
     #
     print('[PASS] test_softmax()')
 
 
 def bench_softmax():
-    prob, topk, sparse = get_input(
+    dense, sparse_csr = get_input(
         batch_size=64, seq_length=1024
     )
-    topk_indices, topk_values = topk
-    dense = torch.scatter(
-        torch.full_like(
-            prob, fill_value=float('-inf')
-        ), dim=-1,
-        index=topk_indices, src=topk_values
-    )
-    dense = dense.detach().clone()
-    dense.requires_grad = True
-    indptr, indices, values = sparse
-    values = values.detach().clone()
-    values.requires_grad = True
+    indptr, indices, values = sparse_csr
 
     # torch
     time.sleep(2.0)

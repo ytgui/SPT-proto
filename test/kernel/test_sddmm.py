@@ -25,25 +25,16 @@ def get_input(batch_size: int,
         src=torch.ones_like(topk.values)
     )
 
-    # sort indices
-    order = torch.argsort(
-        topk.indices, dim=-1
-    )
-    topk_indices = torch.gather(
-        topk.indices, dim=-1, index=order
-    )
-    topk_values = torch.gather(
-        topk.values, dim=-1, index=order
-    )
-
     # sparse
     sparse = mask.to_sparse_csr()
     indptr = sparse.crow_indices()
     indices = sparse.col_indices()
-    indptr = indptr.type(torch.int32)
-    indices = indices.type(torch.int32)
+    sparse_csr = [
+        indptr.type(torch.int32),
+        indices.type(torch.int32)
+    ]
 
-    #
+    # query and key
     q = torch.randn(
         [batch_size, seq_length, n_features],
         requires_grad=True, device=device
@@ -52,19 +43,16 @@ def get_input(batch_size: int,
         [batch_size, seq_length, n_features],
         requires_grad=True, device=device
     )
-    return mask, [topk_indices, topk_values], [
-        indptr, indices, sparse.values()
-    ], q, k
+    return mask, sparse_csr, q, k
 
 
 def test_sddmm():
-    mask, topk, sparse, q, k = get_input(
+    mask, sparse_csr, q, k = get_input(
         batch_size=random.randint(1, 16),
         seq_length=16 * random.randint(1, 16),
         n_features=16 * random.randint(1, 4)
     )
-    topk_indices, topk_values = topk
-    indptr, indices, values = sparse
+    indptr, indices = sparse_csr
 
     # matmul
     y_1 = torch.multiply(
@@ -72,10 +60,6 @@ def test_sddmm():
             q, k.transpose(-1, -2)
         )
     )
-    y_1 = torch.gather(
-        y_1, dim=-1, index=topk_indices
-    )
-    y_1 = torch.flatten(y_1, start_dim=1)
     torch.sum(y_1).backward()
     grad_q_1 = q.grad.detach().clone()
     grad_k_1 = k.grad.detach().clone()
@@ -90,7 +74,10 @@ def test_sddmm():
     grad_k_2 = k.grad.detach().clone()
 
     # check
-    assert torch.allclose(y_1, y_2, atol=1e-3)
+    y_2 = torch.sparse_csr_tensor(
+        indptr, col_indices=indices, values=y_2
+    )
+    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
     assert torch.allclose(grad_q_1, grad_q_2, atol=1e-3)
     assert torch.allclose(grad_k_1, grad_k_2, atol=1e-3)
 
@@ -99,10 +86,11 @@ def test_sddmm():
 
 
 def bench_sddmm():
-    mask, topk, sparse, q, k = get_input(
-        64, seq_length=1024, n_features=64
+    mask, sparse_csr, q, k = get_input(
+        batch_size=64, seq_length=1024,
+        n_features=64
     )
-    indptr, indices, values = sparse
+    indptr, indices = sparse_csr
 
     # dense
     time.sleep(2.0)

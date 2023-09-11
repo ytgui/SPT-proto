@@ -17,28 +17,27 @@ def get_input(batch_size: int, seq_length: int):
         prob, k=seq_length // 8, dim=-1,
         largest=True, sorted=False
     )
-    mask = torch.scatter(
-        torch.zeros_like(prob),
-        dim=-1, index=topk.indices,
-        src=torch.ones_like(topk.values)
+    dense = torch.scatter(
+        torch.zeros_like(prob), dim=-1,
+        index=topk.indices, src=topk.values
     )
-    dense = torch.where(
-        mask > 0.0, prob, torch.full_like(
-            prob, fill_value=float('-inf')
-        )
-    )
-    dense.requires_grad = True
 
     # sparse
-    sparse_mask = mask.to_sparse_csr()
-    indptr = sparse_mask.crow_indices()
-    indices = sparse_mask.col_indices()
+    sparse = dense.to_sparse_csr()
+    indptr = sparse.crow_indices()
+    indices = sparse.col_indices()
     sparse_csr = [
         indptr.type(torch.int32),
         indices.type(torch.int32),
-        topk.values.view_as(indices)
+        sparse.values().type(torch.float)
     ]
     sparse_csr[-1].requires_grad = True
+
+    # fill -inf
+    dense = torch.where(
+        dense > 0.0, dense, float('-inf')
+    )
+    dense.requires_grad = True
 
     #
     return dense, sparse_csr
@@ -70,7 +69,7 @@ def test_softmax():
     grad_2 = torch.sparse_csr_tensor(
         indptr, col_indices=indices, values=grad_2
     )
-    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-2)
+    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
     assert torch.allclose(grad_1, grad_2.to_dense(), atol=1e-3)
 
     #

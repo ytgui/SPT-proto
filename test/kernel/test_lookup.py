@@ -106,7 +106,7 @@ def bench_lookup():
         activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
-        for _ in range(200):
+        for _ in range(20):
             torch.matmul(x_1, x_2)
     print(
         prof.key_averages().table(
@@ -120,7 +120,7 @@ def bench_lookup():
         activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
-        for _ in range(200):
+        for _ in range(20):
             lookup(query, store, sparsity=8)
     print(
         prof.key_averages().table(
@@ -133,7 +133,7 @@ def bench_lookup():
 
 
 def main():
-    test_lookup()
+    # test_lookup()
     bench_lookup()
 
 

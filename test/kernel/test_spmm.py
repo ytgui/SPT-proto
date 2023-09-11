@@ -94,7 +94,7 @@ def bench_spmm():
         activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
-        for _ in range(200):
+        for _ in range(20):
             y_1 = torch.matmul(dense, x)
             torch.sum(y_1).backward()
     print(
@@ -109,7 +109,7 @@ def bench_spmm():
         activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
-        for _ in range(200):
+        for _ in range(20):
             y_2: torch.Tensor = kernels.spmm(
                 indptr, indices, values, x=x
             )

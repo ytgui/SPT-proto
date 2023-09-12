@@ -27,13 +27,13 @@ __global__ void matmul_cuda_kernel(
     for (index_t offset_k = 0; offset_k < k; offset_k += BK) {
         // load
         for (index_t tile_y = 0; tile_y < TM; tile_y += 1) {
-            index_t local_y = tile_y * blockDim.y + thread_y;
+            index_t local_y = thread_y * TM + tile_y;
             cache_lhs[local_y][thread_x] = left[
                 (global_y + local_y) * k + (offset_k + thread_x)
             ];
         }
         for (index_t tile_x = 0; tile_x < TN; tile_x += 1) {
-            index_t local_x = tile_x * blockDim.x + thread_x;
+            index_t local_x = thread_x * TN + tile_x;
             cache_rhs[thread_y][local_x] = right[
                 (offset_k + thread_y) * n + (global_x + local_x)
             ];
@@ -41,17 +41,16 @@ __global__ void matmul_cuda_kernel(
         __syncthreads();
 
         // reduce
-        scalar_t local_lhs[TM];
-        scalar_t local_rhs[TN];
+        scalar_t local_lhs[TM], local_rhs[TN];
         for (index_t i = 0; i < BK; i += 1) {
             // tile lhs
             for (index_t tile_y = 0; tile_y < TM; tile_y += 1) {
-                index_t local_y = tile_y * blockDim.y + thread_y;
+                index_t local_y = thread_y * TM + tile_y;
                 local_lhs[tile_y] = cache_lhs[local_y][i];
             }
             // tile rhs
             for (index_t tile_x = 0; tile_x < TN; tile_x += 1) {
-                index_t local_x = tile_x * blockDim.x + thread_x;
+                index_t local_x = thread_x * TN + tile_x;
                 local_rhs[tile_x] = cache_rhs[i][local_x];
             }
             // product
@@ -66,9 +65,9 @@ __global__ void matmul_cuda_kernel(
 
     // store
     for (index_t tile_y = 0; tile_y < TM; tile_y += 1) {
+        index_t local_y = thread_y * TM + tile_y;
         for (index_t tile_x = 0; tile_x < TN; tile_x += 1) {
-            index_t local_y = tile_y * blockDim.y + thread_y;
-            index_t local_x = tile_x * blockDim.x + thread_x;
+            index_t local_x = thread_x * TN + tile_x;
             output[
                 (global_y + local_y) * n + (global_x + local_x)
             ] = reduced[tile_y][tile_x];

@@ -1,11 +1,12 @@
 #include "common.h"
 
 #define TSZ 4
-#define BSZ 64
+#define BSZ 16
+
 using vector_t = int4;
 
 // clang-format off
-template <unsigned NSP, unsigned NNZ>
+template <unsigned NSP, unsigned MAXNZ>
 __global__ void lookup_forward_kernel(
     index_t batch_size, index_t seq_length, index_t nonzeros,
     const index_t *query, const index_t *store, index_t *output
@@ -17,39 +18,37 @@ __global__ void lookup_forward_kernel(
 
     // cache
     index_t cache_query[NSP];
-    for (index_t k = 0; k < NSP; k += TSZ) {
-        *(vector_t *)&cache_query[k] = __ldg(
-            (const vector_t *)&query[
-                gz * seq_length * NSP + gy * NSP + k
-            ]
-        );
+    for (int16_t k = 0; k < NSP; k += 1) {
+        cache_query[k] = query[
+            gz * seq_length * NSP + gy * NSP + k
+        ];
     }
 
     // result
-    index_t cache_sizes[NSP / 2] = {};
-    index_t cache_indices[NSP / 2][NNZ];
+    #define NSLOTS 3
+    int16_t cache_sizes[NSLOTS] = {};
+    int16_t cache_indices[NSLOTS][MAXNZ];
 
     // window
-    for (index_t offset_x = 0; offset_x < seq_length; offset_x += BSZ) {
+    for (int16_t offset_x = 0; offset_x < seq_length; offset_x += BSZ) {
         // cache
         __shared__ index_t cache_store[BSZ][NSP];
-        for (index_t k = 0; k < NSP; k += TSZ) {
-            *(vector_t *)&cache_store[ty][k] = __ldg(
-                (const vector_t *)&store[
-                    gz * seq_length * NSP + (offset_x + ty) * NSP + k
-                ]
-            );
+        for (int16_t k = 0; k < NSP; k += 1) {
+            cache_store[ty][k] = store[
+                gz * seq_length * NSP + (offset_x + ty) * NSP + k
+            ];
         }
         __syncthreads();
 
         // product
-        for (index_t tx = 0; tx < BSZ; tx += 1) {
-            index_t count = 0;
-            for (index_t k = 0; k < NSP; k += 1) {
+        for (int16_t tx = 0; tx < BSZ; tx += 1) {
+            int16_t count = 0;
+            for (int16_t k = 0; k < NSP; k += 1) {
                 count += (cache_query[k] == cache_store[tx][k]);   
             }
-            index_t slot = min(count / 2, NSP / 2 - 1);
-            index_t cursor = min(cache_sizes[slot], NNZ - 1);
+            count = min(7, count) / 2;
+            int16_t slot = 32 - __clz(count);
+            int16_t cursor = min(cache_sizes[slot], MAXNZ - 1);
             cache_indices[slot][cursor] = offset_x + tx;
             cache_sizes[slot] += 1;
         }
@@ -57,15 +56,14 @@ __global__ void lookup_forward_kernel(
     }
 
     // store
-    index_t slot = NSP / 2 - 1, cursor = 0;
-    for (index_t gx = 0; gx < nonzeros; gx += TSZ) {
+    int16_t slot = NSLOTS - 1, cursor = 0;
+    for (int16_t gx = 0; gx < nonzeros; gx += TSZ) {
         index_t buffer[TSZ];
         for (index_t t = 0; t < TSZ; t += 1) {
             buffer[t] = cache_indices[slot][cursor];
-            // move slot and cursor
-            index_t limit = cache_sizes[slot];
-            slot -= (cursor + 1) / limit;
-            cursor = (cursor + 1) % limit;
+            bool cond = (cursor == cache_sizes[slot] - 1);
+            cursor = cond ? 0 : (cursor + 1);
+            slot = cond ? (slot - 1) : slot;
         }
         __stcs(
             (vector_t *)&output[
@@ -105,12 +103,17 @@ torch::Tensor lookup_forward_cuda(
     dim3 threads(1, BSZ);
     dim3 blocks(1, seq_length / BSZ, batch_size);
     if (n_subspaces == 8) {
-        if (seq_length / sparsity <= 64) {
+        if (nonzeros <= 64) {
             lookup_forward_kernel<8, 64><<<blocks, threads>>>(
                 batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
                 store.data_ptr<index_t>(), output.data_ptr<index_t>()
             );
-        } else if (seq_length / sparsity <= 256) {
+        } else if (nonzeros <= 128) {
+            lookup_forward_kernel<8, 128><<<blocks, threads>>>(
+                batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
+                store.data_ptr<index_t>(), output.data_ptr<index_t>()
+            );
+        } else if (nonzeros <= 256) {
             lookup_forward_kernel<8, 256><<<blocks, threads>>>(
                 batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
                 store.data_ptr<index_t>(), output.data_ptr<index_t>()

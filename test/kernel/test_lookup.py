@@ -89,14 +89,14 @@ def bench_lookup():
     n_subspaces = 8
     query, store = get_input(
         n_subspaces=n_subspaces, n_codewords=4,
-        seq_length=512, batch_size=batch_size
+        seq_length=1024, batch_size=batch_size
     )
     x_1 = torch.randn(
-        [batch_size, 512, n_subspaces * 8],
+        [batch_size, 1024, n_subspaces * 8],
         device=query.device
     )
     x_2 = torch.randn(
-        [batch_size, n_subspaces * 8, 512],
+        [batch_size, n_subspaces * 8, 1024],
         device=query.device
     )
 
@@ -133,7 +133,7 @@ def bench_lookup():
 
 
 def main():
-    # test_lookup()
+    test_lookup()
     bench_lookup()
 
 

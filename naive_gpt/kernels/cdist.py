@@ -15,10 +15,11 @@ class CDist(autograd.Function):
 
     @staticmethod
     def backward(ctx,
-                 grad_output: torch.Tensor):
+                 grad_distance: torch.Tensor,
+                 grad_indices: torch.Tensor):
         query, table = ctx.saved_tensors
         output = ext.cdist_backward_cuda(
-            query, table, grad_output.contiguous()
+            query, table, grad_distance.contiguous()
         )
         grad_query, grad_table = output
         return grad_query, grad_table

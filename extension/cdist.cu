@@ -68,7 +68,7 @@ __global__ void cdist_forward_kernel(
     indices[gz * n_queries + gy] = min_index;
 }
 
-template <typename scalar_t, typename vector_t>
+template <typename scalar_t, typename vector_t, unsigned K>
 __global__ void cdist_backward_query_kernel(
     index_t n_queries, index_t n_codewords, index_t d_code,
     const scalar_t *query, const scalar_t *table, const scalar_t *grad_output,
@@ -78,58 +78,54 @@ __global__ void cdist_backward_query_kernel(
     index_t gz = blockIdx.z * blockDim.z;
     index_t gy = blockIdx.y * blockDim.y + ty;
 
-    // window
-    for (index_t offset_k = 0; offset_k < d_code; offset_k += TSZ) {
-        //cache
-        __shared__ vector_t cache_query[BSZ];
-        cache_query[ty] = __ldg(
+    // load query
+    __shared__ scalar_t cache_query[BSZ][K];
+    for (index_t i = 0; i < K; i += TSZ) {
+        *(vector_t *)&cache_query[ty][i] = __ldg(
             (const vector_t *)&query[
-                gz * n_queries * d_code + gy * d_code + offset_k
+                gz * n_queries * d_code + gy * d_code + i
             ]
         );
+    }
 
-        // reduce
-        vector_t reduced = {};
-        for (index_t offset_x = 0; offset_x < n_codewords; offset_x += BSZ) {
-            // cache
-            __shared__ vector_t cache_table[BSZ];
-            __shared__ scalar_t cache_grad_output[BSZ][BSZ];
-            cache_table[ty] = __ldg(
+    // window
+    scalar_t reduced[K] = {};
+    for (index_t offset_x = 0; offset_x < n_codewords; offset_x += BSZ) {
+        // load table
+        __shared__ scalar_t cache_table[BSZ][K];
+        for (index_t i = 0; i < K; i += TSZ) {
+            *(vector_t *)&cache_table[ty][i] = __ldg(
                 (const vector_t *)&table[
-                    gz * n_codewords * d_code + (offset_x + ty) * d_code + offset_k
+                    gz * n_codewords * d_code + (offset_x + ty) * d_code + i
                 ]
             );
-            for (index_t tx = 0; tx < BSZ; tx += TSZ) {
-                *(vector_t *)&cache_grad_output[ty][tx] = __ldg(
-                    (const vector_t *)&grad_output[
-                        gz * n_queries * n_codewords + gy * n_codewords + (offset_x + tx)
-                    ]
-                );
-            }
-            __syncthreads();
-
-            // product
-            for (index_t tx = 0; tx < BSZ; tx += 1) {
-                scalar_t grad_v = cache_grad_output[ty][tx];
-                vector_t grad_abs = {
-                    (cache_query[ty].x - cache_table[tx].x) > 0 ? grad_v : -grad_v,
-                    (cache_query[ty].y - cache_table[tx].y) > 0 ? grad_v : -grad_v,
-                    (cache_query[ty].z - cache_table[tx].z) > 0 ? grad_v : -grad_v,
-                    (cache_query[ty].w - cache_table[tx].w) > 0 ? grad_v : -grad_v,
-                };
-                reduced.x += grad_abs.x;
-                reduced.y += grad_abs.y;
-                reduced.z += grad_abs.z;
-                reduced.w += grad_abs.w;
-            }
-            __syncthreads();
         }
+        __shared__ scalar_t cache_grad_output[BSZ][BSZ];
+        for (index_t local_x = 0; local_x < BSZ; local_x += TSZ) {
+            *(vector_t *)&cache_grad_output[ty][local_x] = __ldg(
+                (const vector_t *)&grad_output[
+                    gz * n_queries * n_codewords + gy * n_codewords + (offset_x + local_x)
+                ]
+            );
+        }
+        __syncthreads();
 
-        // store
+        // product
+        for (index_t local_x = 0; local_x < BSZ; local_x += 1) {
+            scalar_t grad_v = cache_grad_output[ty][local_x];
+            for (index_t i = 0; i < K; i += 1) {
+                reduced[i] += (cache_query[ty][i] - cache_table[local_x][i]) > 0 ? grad_v : -grad_v;
+            }
+        }
+        __syncthreads();
+    }
+
+    // store
+    for (index_t i = 0; i < K; i += TSZ) {
         __stcs(
             (vector_t *)&grad_query[
-                gz * n_queries * d_code + gy * d_code + offset_k
-            ], reduced
+                gz * n_queries * d_code + gy * d_code + i
+            ], *(const vector_t *)&reduced[i]
         );
     }
 }
@@ -266,11 +262,21 @@ std::vector<torch::Tensor> cdist_backward_cuda(
     {
         dim3 threads(1, BSZ);
         dim3 blocks(1, n_queries / BSZ, n_subspaces);
-        cdist_backward_query_kernel<float, float4><<<blocks, threads>>>(
-            n_queries, n_codewords, d_code, query.data_ptr<float>(),
-            table.data_ptr<float>(), grad_output.data_ptr<float>(),
-            grad_query.data_ptr<float>()
-        );
+        if (d_code == 4) {
+            cdist_backward_query_kernel<float, float4, 8><<<blocks, threads>>>(
+                n_queries, n_codewords, d_code, query.data_ptr<float>(),
+                table.data_ptr<float>(), grad_output.data_ptr<float>(),
+                grad_query.data_ptr<float>()
+            );
+        } else if (d_code == 8) {
+            cdist_backward_query_kernel<float, float4, 8><<<blocks, threads>>>(
+                n_queries, n_codewords, d_code, query.data_ptr<float>(),
+                table.data_ptr<float>(), grad_output.data_ptr<float>(),
+                grad_query.data_ptr<float>()
+            );
+        } else {
+            TORCH_CHECK(false && "d_code not supported");
+        }
         TORCH_CHECK(cudaGetLastError() == cudaSuccess);
     }
 

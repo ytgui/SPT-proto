@@ -1,58 +1,71 @@
 #include "common.h"
 
 #define TSZ 4
-#define BSZ 64
+#define BSZ 16
 
 // clang-format off
-template <typename scalar_t, typename vector_t>
+template <typename scalar_t, typename vector_t, unsigned K>
 __global__ void cdist_forward_kernel(
     index_t n_queries, index_t n_codewords, index_t d_code,
-    const scalar_t *query, const scalar_t *table, scalar_t *output) {
+    const scalar_t *query, const scalar_t *table,
+    scalar_t *distance, index_t *indices) {
     // index
     index_t ty = threadIdx.y;
     index_t gz = blockIdx.z * blockDim.z;
     index_t gy = blockIdx.y * blockDim.y + ty;
 
-    // window
-    for (index_t offset_x = 0; offset_x < n_codewords; offset_x += BSZ) {
-        // reduce
-        scalar_t reduced[BSZ] = {};
-        for (index_t offset_k = 0; offset_k < d_code; offset_k += TSZ) {
-            // cache
-            __shared__ vector_t cache_query[BSZ];
-            __shared__ vector_t cache_table[BSZ];
-            cache_query[ty] = __ldg(
-                (const vector_t *)&query[
-                    gz * n_queries * d_code + gy * d_code + offset_k
-                ]
-            );
-            cache_table[ty] = __ldg(
-                (const vector_t *)&table[
-                    gz * n_codewords * d_code + (offset_x + ty) * d_code + offset_k
-                ]
-            );
-            __syncthreads();
-
-            // product
-            for (index_t tx = 0; tx < BSZ; tx += 1) {
-                reduced[tx] += fabsf(cache_query[ty].x - cache_table[tx].x);
-                reduced[tx] += fabsf(cache_query[ty].y - cache_table[tx].y);
-                reduced[tx] += fabsf(cache_query[ty].z - cache_table[tx].z);
-                reduced[tx] += fabsf(cache_query[ty].w - cache_table[tx].w);
-            }
-            __syncthreads();
-        }
-
-        // store
-        index_t offset_z = gz * n_queries * n_codewords;
-        for (index_t tx = 0; tx < BSZ; tx += TSZ) {
-            index_t gx = offset_x + tx;
-            __stcs(
-                (vector_t *)&output[offset_z + gy * n_codewords + gx],
-                *(const vector_t *)&reduced[tx]
-            );
-        }
+    // load query
+    __shared__ scalar_t cache_query[BSZ][K];
+    for (index_t i = 0; i < K; i += TSZ) {
+        *(vector_t *)&cache_query[ty][i] = __ldg(
+            (const vector_t *)&query[
+                gz * n_queries * d_code + gy * d_code + i
+            ]
+        );
     }
+
+    // window
+    index_t min_index = 0;
+    scalar_t min_distance = 1e13;
+    for (index_t offset_x = 0; offset_x < n_codewords; offset_x += BSZ) {
+        // load table
+        __shared__ scalar_t cache_table[BSZ][K];
+        for (index_t i = 0; i < K; i += TSZ) {
+            *(vector_t *)&cache_table[ty][i] = __ldg(
+                (const vector_t *)&table[
+                    gz * n_codewords * d_code + (offset_x + ty) * d_code + i
+                ]
+            );
+        }
+        __syncthreads();
+
+        // distance
+        for (index_t local_x = 0; local_x < BSZ; local_x += TSZ) {
+            // reduce
+            scalar_t reduced[TSZ] = {};
+            for (index_t t = 0; t < TSZ; t += 1) {
+                for (index_t i = 0; i < K; i += 1) {
+                    reduced[t] += fabsf(
+                        cache_query[ty][i] - cache_table[local_x + t][i]
+                    );
+                }
+                bool cond = reduced[t] < min_distance;
+                min_index = cond ? (offset_x + local_x + t) : min_index;
+                min_distance = cond ? reduced[t] : min_distance;
+            }
+            // store
+            index_t offset_b = gz * n_queries * n_codewords;
+            __stcs(
+                (vector_t *)&distance[
+                    offset_b + gy * n_codewords + (offset_x + local_x)
+                ], *(const vector_t *)reduced
+            );
+        }
+        __syncthreads();
+    }
+
+    // store indices
+    indices[gz * n_queries + gy] = min_index;
 }
 
 template <typename scalar_t, typename vector_t>
@@ -173,7 +186,7 @@ __global__ void cdist_backward_table_kernel(
 }
 // clang-format on
 
-torch::Tensor cdist_forward_cuda(
+std::vector<torch::Tensor> cdist_forward_cuda(
     const torch::Tensor &query, const torch::Tensor &table
 ) {
     CHECK_DIM(query, 3);
@@ -191,21 +204,35 @@ torch::Tensor cdist_forward_cuda(
     TORCH_CHECK(d_code % TSZ == 0);
     TORCH_CHECK(n_queries % BSZ == 0);
     TORCH_CHECK(n_codewords % BSZ == 0);
-    auto output = torch::zeros(
+    auto distance = torch::empty(
         {n_subspaces, n_queries, n_codewords}, query.options()
+    );
+    auto indices = torch::empty(
+        {n_subspaces, n_queries}, query.options().dtype(torch::kInt32)
     );
 
     // dispatch
     dim3 threads(1, BSZ);
     dim3 blocks(1, n_queries / BSZ, n_subspaces);
-    cdist_forward_kernel<float, float4><<<blocks, threads>>>(
-        n_queries, n_codewords, d_code, query.data_ptr<float>(),
-        table.data_ptr<float>(), output.data_ptr<float>()
-    );
+    if (d_code == 4) {
+        cdist_forward_kernel<float, float4, 4><<<blocks, threads>>>(
+            n_queries, n_codewords, d_code, query.data_ptr<float>(),
+            table.data_ptr<float>(), distance.data_ptr<float>(),
+            indices.data_ptr<index_t>()
+        );
+    } else if (d_code == 8) {
+        cdist_forward_kernel<float, float4, 8><<<blocks, threads>>>(
+            n_queries, n_codewords, d_code, query.data_ptr<float>(),
+            table.data_ptr<float>(), distance.data_ptr<float>(),
+            indices.data_ptr<index_t>()
+        );
+    } else {
+        TORCH_CHECK(false && "d_code not supported");
+    }
     TORCH_CHECK(cudaGetLastError() == cudaSuccess);
 
     //
-    return output;
+    return {distance, indices};
 }
 
 std::vector<torch::Tensor> cdist_backward_cuda(

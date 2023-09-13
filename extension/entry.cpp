@@ -8,7 +8,7 @@ torch::Tensor matmul_cuda(
     const torch::Tensor &left, const torch::Tensor &right
 );
 
-torch::Tensor cdist_forward_cuda(
+std::vector<torch::Tensor> cdist_forward_cuda(
     const torch::Tensor &query, const torch::Tensor &table
 );
 

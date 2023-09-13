@@ -9,7 +9,9 @@ class CDist(autograd.Function):
                 query: torch.Tensor,
                 table: torch.Tensor):
         ctx.save_for_backward(query, table)
-        return ext.cdist_forward_cuda(query, table)
+        output = ext.cdist_forward_cuda(query, table)
+        distance, indices = output
+        return distance, indices
 
     @staticmethod
     def backward(ctx,
@@ -23,5 +25,5 @@ class CDist(autograd.Function):
 
 
 def cdist(query: torch.Tensor,
-             table: torch.Tensor):
+          table: torch.Tensor):
     return CDist.apply(query, table)

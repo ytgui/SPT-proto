@@ -51,7 +51,7 @@ def get_input(n_subspaces: int,
 def test_lookup():
     query, store = get_input(
         n_subspaces=8, n_codewords=4,
-        seq_length=512, batch_size=64
+        seq_length=1024, batch_size=64
     )
 
     # builtin

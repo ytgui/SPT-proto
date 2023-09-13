@@ -1,6 +1,5 @@
 # PQ
 from .product import PQ
-from .distance import PQTable
 
 # Attention
 from .attention import VanillaAttention

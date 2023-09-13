@@ -1,29 +1,7 @@
 import time
 import torch
 from torch import profiler
-from torch import autograd
-from naive_gpt import ext
-
-
-class Lookup(autograd.Function):
-    @staticmethod
-    def forward(ctx,
-                config: torch.Tensor,
-                query: torch.Tensor,
-                store: torch.Tensor):
-        return ext.lookup_forward_cuda(config, query, store)
-
-    @staticmethod
-    def backward(ctx,
-                 grad_output: torch.Tensor):
-        raise NotImplementedError
-
-
-def lookup(query: torch.Tensor,
-           store: torch.Tensor,
-           sparsity: int):
-    config = torch.empty([sparsity])
-    return Lookup.apply(config, query, store)
+from naive_gpt import kernels
 
 
 def get_input(n_subspaces: int,
@@ -67,7 +45,9 @@ def test_lookup():
     y_1 = torch.flatten(topk_indices, end_dim=-2)
 
     # kernel
-    lookup_indices = lookup(query, store, sparsity=8)
+    lookup_indices = kernels.lookup(
+        query, store, sparsity=8
+    )
     y_2 = torch.flatten(lookup_indices, end_dim=-2)
 
     # check
@@ -121,7 +101,7 @@ def bench_lookup():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            lookup(query, store, sparsity=8)
+            kernels.lookup(query, store, sparsity=8)
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

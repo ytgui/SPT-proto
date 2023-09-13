@@ -1,6 +1,9 @@
 # cdist
 from .cdist import cdist
 
+# lookup
+from .lookup import lookup
+
 # softmax
 from .softmax import softmax
 

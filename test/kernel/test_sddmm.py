@@ -91,6 +91,9 @@ def bench_sddmm():
         n_features=64
     )
     indptr, indices = sparse_csr
+    sort_names = [
+        'cuda_time_total', 'cuda_memory_usage'
+    ]
 
     # dense
     time.sleep(2.0)
@@ -98,18 +101,17 @@ def bench_sddmm():
         activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
-        for _ in range(200):
+        for _ in range(20):
             y_1 = torch.multiply(
                 mask, torch.matmul(
                     q, k.transpose(-1, -2)
                 )
             )
             torch.sum(y_1).backward()
-    print(
-        prof.key_averages().table(
-            sort_by='cuda_time_total', row_limit=5
-        )
-    )
+    for name in sort_names:
+        print(prof.key_averages().table(
+            sort_by=name, row_limit=5
+        ))
 
     # kernel
     time.sleep(2.0)
@@ -117,16 +119,15 @@ def bench_sddmm():
         activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
-        for _ in range(200):
+        for _ in range(20):
             y_2 = kernels.sddmm(
                 indptr, indices, query=q, key=k
             )
             torch.sum(y_2).backward()
-    print(
-        prof.key_averages().table(
-            sort_by='cuda_time_total', row_limit=5
-        )
-    )
+    for name in sort_names:
+        print(prof.key_averages().table(
+            sort_by=name, row_limit=5
+        ))
 
     #
     print('[PASS] bench_sddmm()')

@@ -100,7 +100,7 @@ class LightningModel(L.LightningModule):
 
     def training_step(self, batch: tuple, batch_idx: int):
         x, center = batch
-        loss_pq = self.quantizer('train', x)[-1]
+        loss_pq = self.quantizer('train', x)
         self.log('loss_pq', loss_pq, prog_bar=True)
         return loss_pq
 

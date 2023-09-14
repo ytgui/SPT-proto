@@ -1,5 +1,5 @@
 # PQ
-from .product import PQ
+from .quantizer import PQ
 
 # Attention
 from .attention import VanillaAttention

@@ -53,20 +53,28 @@ class PQ(nn.Module):
         else:
             if self.weight.is_cpu:
                 distance = torch.cdist(
-                    z_flat, self.weight
+                    z_flat, self.weight, p=1.0
+                )
+                indices = torch.argmin(
+                    distance, dim=-1, keepdim=True
                 )
             else:
-                distance = kernels.cdist(
+                distance, indices = kernels.cdist(
                     z_flat, table=self.weight
                 )
-            indices = torch.argmin(
-                distance, dim=-1, keepdim=True
-            )
+                indices = indices.unsqueeze(-1)
+        assert indices.dim() == 3
+
+        # encode
+        if mode == 'encode':
+            indices = indices.transpose(0, 1)
+            indices = indices.view(z_shape)
+            return indices.contiguous()
 
         # z_q: centroids
         z_q_flat = torch.gather(
             self.weight, dim=1, index=indices.expand(
-                size=list(indices.size())[:-1] + [self.d_codeword]
+                size=[-1, -1, self.d_codeword]
             )
         )
         assert z_q_flat.dim() == 3
@@ -75,14 +83,6 @@ class PQ(nn.Module):
         )
         if mode in ['decode', 'quantize']:
             return z_q
-
-        # indices: reshape
-        assert indices.dim() == 3
-        indices = torch.reshape(
-            indices.transpose(0, 1), shape=z_shape
-        )
-        if mode == 'encode':
-            return indices
 
         # training
         if mode != 'train':
@@ -113,4 +113,4 @@ class PQ(nn.Module):
             raise RuntimeError
 
         #
-        return indices, loss
+        return loss

@@ -20,9 +20,6 @@ class SparseAttention(layers.VanillaAttention):
             n_codewords=n_codewords,
             n_subspaces=d_head // d_codeword
         )
-        self.table = layers.PQTable(
-            quantizer=self.quantizer, dim=1
-        )
 
     def _get_attn(self,
                   q: torch.Tensor,
@@ -32,26 +29,42 @@ class SparseAttention(layers.VanillaAttention):
         assert q.size() == k.size()
         seq_length = q.size(1)
 
-        # loss: 0.01s
-        q_c, loss_q = self.quantizer('train', z=q)
-        k_c, loss_k = self.quantizer('train', z=k)
-        self.register_buffer(
-            'loss', loss_q + loss_k, persistent=False
-        )
+        # transpose: 0.4ms
+        torch.cuda.synchronize()
+        before = time.time()
+        q = q.transpose(1, 2).contiguous()
+        k = k.transpose(1, 2).contiguous()
+        q = q.view([-1, q.size(-2), q.size(-1)])
+        k = k.view([-1, k.size(-2), k.size(-1)])
+        torch.cuda.synchronize()
+        print('timing transpose: {:.1f}ms'.format(
+            1000.0 * (time.time() - before)
+        ))
 
-        # distance: 0.15s
-        distance = self.table(q_c, k_c)
-        distance = torch.transpose(distance, 1, 2)
-        
+        # quantizer: 2.3ms
+        torch.cuda.synchronize()
+        before = time.time()
+        q_c = self.quantizer('encode', z=q)
+        k_c = self.quantizer('encode', z=k)
+        torch.cuda.synchronize()
+        print('timing quantizer: {:.1f}ms'.format(
+            1000.0 * (time.time() - before)
+        ))
 
-        # indptr and indices: 0.01s
+        # lookup: 2.0ms
+        torch.cuda.synchronize()
+        before = time.time()
+        topk_indices = kernels.lookup(q_c, k_c, sparsity=8)
+        csr_indices = topk_indices.flatten(start_dim=1)
+        torch.cuda.synchronize()
+        print('timing lookup: {:.1f}ms'.format(
+            1000.0 * (time.time() - before)
+        ))
+
+        # indptr: 1.0ms
+        torch.cuda.synchronize()
+        before = time.time()
         top_k = seq_length // 8
-        top_indices = torch.topk(
-            distance, k=top_k, largest=False, sorted=False
-        )[-1]
-        csr_indices = top_indices.flatten(start_dim=2)
-        csr_indices = csr_indices.flatten(end_dim=1)
-        csr_indices = csr_indices.type(torch.int)
         fixed_indptr = torch.arange(
             0, top_k * seq_length + 1, step=top_k,
             dtype=torch.int, device=q.device
@@ -59,66 +72,104 @@ class SparseAttention(layers.VanillaAttention):
         fixed_indptr = fixed_indptr.view(1, -1).repeat(
             repeats=[csr_indices.size(0), 1]
         ).contiguous()
+        torch.cuda.synchronize()
+        print('timing indptr: {:.1f}ms'.format(
+            1000.0 * (time.time() - before)
+        ))
 
         # attention: 0.01s
-        query = q.transpose(1, 2).contiguous().flatten(end_dim=1)
-        key = k.transpose(1, 2).contiguous().flatten(end_dim=1)
+        torch.cuda.synchronize()
+        before = time.time()
         attn_values = kernels.sddmm(
-            fixed_indptr, csr_indices, query=query, key=key
+            fixed_indptr, csr_indices, query=q, key=k
         )
         attn_values = kernels.softmax(
             fixed_indptr, csr_indices, values=attn_values
         )
+        torch.cuda.synchronize()
+        print('timing sddmm + softmax: {:.1f}ms'.format(
+            1000.0 * (time.time() - before)
+        ))
         return fixed_indptr, csr_indices, attn_values
 
     def _apply_attn(self,
                     attn: torch.Tensor,
                     v: torch.Tensor):
-        indptr, indices, attn_values = attn
-        v = v.transpose(1, 2).contiguous().flatten(end_dim=1)
-        return kernels.spmm(indptr, indices, attn_values, v)
+        torch.cuda.synchronize()
+        before = time.time()
+        indptr, indices, values = attn
+        v = v.transpose(1, 2).contiguous()
+        v = v.view([-1, v.size(-2), v.size(-1)])
+        y = kernels.spmm(indptr, indices, values, v)
+        torch.cuda.synchronize()
+        print('timing transpose + spmm: {:.1f}ms'.format(
+            1000.0 * (time.time() - before)
+        ))
+        return y
 
 
 def main():
     d_head = 64
-    n_heads = 8
+    n_heads = 4
     batch_size = 16
-    seq_length = 512
+    seq_length = 1024
     cuda_device = 'cuda'
 
     #
-    x = torch.randn(
-        [batch_size, seq_length,
-         n_heads, d_head],
-        device=cuda_device
-    )
+    def get_input():
+        q = torch.randn(
+            [batch_size, seq_length, n_heads, d_head],
+            requires_grad=True, device=cuda_device
+        )
+        k = torch.randn(
+            [batch_size, seq_length, n_heads, d_head],
+            requires_grad=True, device=cuda_device
+        )
+        v = torch.randn(
+            [batch_size, seq_length, n_heads, d_head],
+            requires_grad=True, device=cuda_device
+        )
+        return q, k, v
+
+    #
     dense_fn = layers.VanillaAttention(
         d_head=d_head, p_dropout=0.0
     )
     dense_fn = dense_fn.to(cuda_device)
     sparse_fn = SparseAttention(
-        d_head=d_head, d_codeword=4,
-        n_codewords=64, p_dropout=0.0
+        d_head=d_head, d_codeword=8,
+        n_codewords=16, p_dropout=0.0
     )
     sparse_fn = sparse_fn.to(cuda_device)
 
-    #
-    time.sleep(2.0)
-    torch.cuda.synchronize()
-    before = time.time()
-    for _ in range(20):
-        y_1 = dense_fn(x, x, x, attn_mask=None)
-    torch.cuda.synchronize()
-    print('timing dense:', time.time() - before)
+    # warm up
+    q, k, v = get_input()
+    dense_fn(q, k, v, attn_mask=None)
+    sparse_fn(q, k, v, attn_mask=None)
 
-    #
+    # dense
     time.sleep(2.0)
     torch.cuda.synchronize()
     before = time.time()
-    for _ in range(20):
-        y_2 = sparse_fn(x, x, x, attn_mask=None)
+    for _ in range(1):
+        q, k, v = get_input()
+        dense_fn(q, k, v, attn_mask=None)
     torch.cuda.synchronize()
-    print('timing sparse:', time.time() - before)
+    print('timing dense: {:.1f}ms'.format(
+        1000.0 * (time.time() - before)
+    ))
+
+    # sparse
+    time.sleep(2.0)
+    torch.cuda.synchronize()
+    before = time.time()
+    for _ in range(1):
+        q, k, v = get_input()
+        sparse_fn(q, k, v, attn_mask=None)
+    torch.cuda.synchronize()
+    print('timing sparse: {:.1f}ms'.format(
+        1000.0 * (time.time() - before)
+    ))
 
     #
     return

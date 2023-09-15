@@ -54,17 +54,17 @@ def get_input(in_blocks: int,
     )
 
     #
-    return config, mask, dense, [indptr, indices], x
+    return config, mask, [indptr, indices, dense], x
 
 
 def test_blkmv():
-    config, mask, dense, sparse, x = get_input(
+    config, mask, sparse, x = get_input(
         in_blocks=4 * random.randint(1, 4),
         out_blocks=4 * random.randint(1, 4),
         block_size=4 * random.randint(1, 4),
         batch_size=random.randint(1, 16)
     )
-    indptr, indices = sparse
+    indptr, indices, dense = sparse
 
     # dense
     y_1 = torch.matmul(

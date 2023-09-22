@@ -34,15 +34,16 @@ def test_fc():
     in_features = 128 * random.randint(1, 16)
     out_features = 128 * random.randint(1, 64)
     batch_size = 128 * random.randint(1, 16)
+    cuda_device = 'cuda'
 
     #
     x = torch.rand(
         size=[batch_size, in_features],
-        device='cuda', requires_grad=True
+        device=cuda_device, requires_grad=True
     )
     weight = torch.rand(
         size=[out_features, in_features],
-        device='cuda', requires_grad=True
+        device=cuda_device, requires_grad=True
     )
 
     # builtin
@@ -55,13 +56,16 @@ def bench_fc():
     in_features = 512
     out_features = 2048
     batch_size = 64 * 256
+    cuda_device = 'cuda'
+
+    #
     x = torch.rand(
         size=[batch_size, in_features],
-        device='cuda', requires_grad=True
+        device=cuda_device, requires_grad=True
     )
     weight = torch.rand(
         size=[out_features, in_features],
-        device='cuda', requires_grad=True
+        device=cuda_device, requires_grad=True
     )
 
     #

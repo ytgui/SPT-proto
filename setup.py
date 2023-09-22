@@ -31,7 +31,6 @@ setup(
             'naive_gpt.ext',
             sources=[
                 'extension/entry.cpp',
-                'extension/matmul.cu',
                 'extension/blkmv.cpp',
                 'extension/softmax.cu',
                 'extension/cdist.cu',

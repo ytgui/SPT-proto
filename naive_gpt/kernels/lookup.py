@@ -7,9 +7,12 @@ class Lookup(autograd.Function):
     @staticmethod
     def forward(ctx,
                 config: torch.Tensor,
+                indptr: torch.Tensor,
                 query: torch.Tensor,
                 store: torch.Tensor):
-        return ext.lookup_forward_cuda(config, query, store)
+        return ext.lookup_forward_cuda(
+            config, indptr, query, store
+        )
 
     @staticmethod
     def backward(ctx,
@@ -17,8 +20,9 @@ class Lookup(autograd.Function):
         raise NotImplementedError
 
 
-def lookup(query: torch.Tensor,
-           store: torch.Tensor,
-           sparsity: int):
-    config = torch.empty([sparsity])
-    return Lookup.apply(config, query, store)
+def lookup(indptr: torch.Tensor,
+           query: torch.Tensor,
+           key: torch.Tensor,
+           sparse_coeff: int):
+    config = torch.empty([sparse_coeff])
+    return Lookup.apply(config, indptr, query, key)

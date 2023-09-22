@@ -259,11 +259,11 @@ std::vector<torch::Tensor> cdist_backward_cuda(
     auto grad_table = torch::zeros_like(table);
 
     // dispatch query
-    {
+    [&]() {
         dim3 threads(1, BSZ);
         dim3 blocks(1, n_queries / BSZ, n_subspaces);
         if (d_code == 4) {
-            cdist_backward_query_kernel<float, float4, 8><<<blocks, threads>>>(
+            cdist_backward_query_kernel<float, float4, 4><<<blocks, threads>>>(
                 n_queries, n_codewords, d_code, query.data_ptr<float>(),
                 table.data_ptr<float>(), grad_output.data_ptr<float>(),
                 grad_query.data_ptr<float>()
@@ -278,10 +278,10 @@ std::vector<torch::Tensor> cdist_backward_cuda(
             TORCH_CHECK(false && "d_code not supported");
         }
         TORCH_CHECK(cudaGetLastError() == cudaSuccess);
-    }
+    }();
 
     // dispatch table
-    {
+    [&]() {
         dim3 threads(BSZ, TSZ);
         dim3 blocks(n_codewords / BSZ, d_code / TSZ, n_subspaces);
         cdist_backward_table_kernel<float, float4><<<blocks, threads>>>(
@@ -290,7 +290,7 @@ std::vector<torch::Tensor> cdist_backward_cuda(
             grad_table.data_ptr<float>()
         );
         TORCH_CHECK(cudaGetLastError() == cudaSuccess);
-    }
+    }();
 
     //
     return {grad_query, grad_table};

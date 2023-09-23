@@ -8,10 +8,9 @@ from naive_gpt import kernels
 def get_input(batch_size: int, seq_length: int):
     cuda_device = 'cuda'
 
-    # mask
+    # dense
     x = torch.randn(
-        [batch_size, seq_length, 16],
-        device=cuda_device
+        [batch_size, seq_length, 16]
     )
     dense = torch.matmul(
         x, x.transpose(-1, -2)
@@ -19,21 +18,23 @@ def get_input(batch_size: int, seq_length: int):
     dense = torch.clamp(
         dense, min=-5.0, max=5.0
     )
-    mask = torch.tril(
-        torch.ones_like(
-            dense, dtype=torch.bool
-        )
-    )
-    dense = torch.where(mask, dense, -5.0)
-    topk = torch.topk(
-        dense, k=seq_length // 8, dim=-1,
-        largest=True, sorted=False
-    )
-    dense = torch.scatter(
-        torch.zeros_like(dense), dim=-1,
-        index=topk.indices, src=topk.values
-    )
-    dense = torch.where(mask, dense, 0.0)
+
+    # sparsify
+    for b in range(batch_size):
+        for row in range(seq_length):
+            topk = min(
+                row + 1, seq_length // 8
+            )
+            topk_output = torch.topk(
+                dense[b, row, :(row + 1)],
+                k=topk, dim=-1, largest=True
+            )
+            dense[b, row] = torch.scatter(
+                torch.zeros_like(dense[b, row]),
+                dim=-1, index=topk_output.indices,
+                src=topk_output.values
+            )
+    dense = dense.to(cuda_device)
 
     # sparse
     sparse = dense.to_sparse_csr()
@@ -58,7 +59,7 @@ def get_input(batch_size: int, seq_length: int):
 
 def test_softmax():
     dense, sparse_csr = get_input(
-        batch_size=random.randint(1, 64),
+        batch_size=random.randint(1, 16),
         seq_length=64 * random.randint(1, 16)
     )
     indptr, indices, values = sparse_csr

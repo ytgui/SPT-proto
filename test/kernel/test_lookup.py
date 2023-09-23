@@ -66,10 +66,11 @@ def test_lookup():
         y_1.append([])
         for row in range(seq_length):
             topk = min(
-                row + 1, reduced.size(-1) // 8
+                row + 1, seq_length // 8
             )
             topk_indices = torch.topk(
-                reduced[b, row], k=topk, dim=-1
+                reduced[b, row, :(row + 1)],
+                k=topk, dim=-1, largest=True
             ).indices
             y_1[b].extend(topk_indices.tolist())
     y_1 = torch.IntTensor(y_1).to(query.device)

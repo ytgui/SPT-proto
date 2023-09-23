@@ -57,5 +57,6 @@
     }
 
 using index_t = int32_t;
+using index_vt = int4;
 
 #endif

@@ -13,6 +13,13 @@ def get_input(batch_size: int, seq_length: int):
         [batch_size, seq_length, seq_length],
         device=cuda_device
     )
+    mask = torch.tril(
+        torch.ones(
+            [batch_size, seq_length, seq_length],
+            dtype=torch.bool, device=cuda_device
+        )
+    )
+    prob = torch.where(mask, prob, 0.0)
     topk = torch.topk(
         prob, k=seq_length // 8, dim=-1,
         largest=True, sorted=False
@@ -23,19 +30,28 @@ def get_input(batch_size: int, seq_length: int):
     )
 
     # sparse
-    sparse = dense.to_sparse_csr()
-    indptr = sparse.crow_indices()
-    indices = sparse.col_indices()
+    indices = torch.flatten(
+        topk.indices, start_dim=1
+    )
+    indptr = torch.arange(
+        0, seq_length * seq_length // 8 + 1,
+        step=seq_length // 8, device=cuda_device
+    )
     sparse_csr = [
         indptr.type(torch.int32),
         indices.type(torch.int32),
-        sparse.values().type(torch.float)
+        torch.flatten(
+            topk.values, start_dim=1
+        ).detach()
     ]
     sparse_csr[-1].requires_grad = True
 
     # fill -inf
     dense = torch.where(
         dense > 0.0, dense, float('-inf')
+    )
+    dense = torch.where(
+        mask, dense, float('-inf')
     )
     dense.requires_grad = True
 
@@ -45,7 +61,7 @@ def get_input(batch_size: int, seq_length: int):
 
 def test_softmax():
     dense, sparse_csr = get_input(
-        batch_size=random.randint(1, 64),
+        batch_size=random.randint(1, 16),
         seq_length=64 * random.randint(1, 16)
     )
     indptr, indices, values = sparse_csr
@@ -63,11 +79,14 @@ def test_softmax():
     grad_2 = values.grad.detach().clone()
 
     # check
+    indptr = torch.expand_copy(
+        indptr.view(1, -1), size=[indices.size(0), -1]
+    )
     y_2 = torch.sparse_csr_tensor(
-        indptr, col_indices=indices, values=y_2
+        indptr, col_indices=indices, values=y_2, size=y_1.size()
     )
     grad_2 = torch.sparse_csr_tensor(
-        indptr, col_indices=indices, values=grad_2
+        indptr, col_indices=indices, values=grad_2, size=grad_1.size()
     )
     assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
     assert torch.allclose(grad_1, grad_2.to_dense(), atol=1e-3)

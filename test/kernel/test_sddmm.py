@@ -30,7 +30,7 @@ def get_input(batch_size: int,
     indptr = sparse.crow_indices()
     indices = sparse.col_indices()
     sparse_csr = [
-        indptr.type(torch.int32),
+        indptr[0].type(torch.int32),
         indices.type(torch.int32)
     ]
 
@@ -74,6 +74,9 @@ def test_sddmm():
     grad_k_2 = k.grad.detach().clone()
 
     # check
+    indptr = torch.expand_copy(
+        indptr.view(1, -1), size=[indices.size(0), -1]
+    )
     y_2 = torch.sparse_csr_tensor(
         indptr, col_indices=indices, values=y_2
     )

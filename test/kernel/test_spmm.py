@@ -29,7 +29,7 @@ def get_input(batch_size: int,
     indptr = sparse.crow_indices()
     indices = sparse.col_indices()
     sparse_csr = [
-        indptr.type(torch.int32),
+        indptr[0].type(torch.int32),
         indices.type(torch.int32),
         sparse.values().type(torch.float)
     ]
@@ -72,6 +72,9 @@ def test_spmm():
     assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
     grad_a_1 = torch.where(
         dense > 0.0, grad_a_1, 0.0
+    )
+    indptr = torch.expand_copy(
+        indptr.view(1, -1), size=[indices.size(0), -1]
     )
     grad_a_2 = torch.sparse_csr_tensor(
         indptr, col_indices=indices, values=grad_a_2

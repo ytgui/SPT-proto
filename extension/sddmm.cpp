@@ -7,11 +7,12 @@ torch::Tensor sddmm_forward_cuda(
 ) {
     CHECK_DIM(key, 3);
     CHECK_DIM(query, 3);
-    CHECK_DIM(indptr, 1);
+    CHECK_DIM(indptr, 2);
     CHECK_DIM(indices, 2);
     CHECK_TYPE(indptr, torch::kInt32);
     CHECK_TYPE(indices, torch::kInt32);
     TORCH_CHECK(query.sizes() == key.sizes());
+    TORCH_CHECK(query.size(0) == indptr.size(0));
     TORCH_CHECK(query.size(0) == indices.size(0));
     TORCH_CHECK(query.scalar_type() == key.scalar_type());
 
@@ -20,7 +21,7 @@ torch::Tensor sddmm_forward_cuda(
     index_t batch_size = query.size(0);
     index_t seq_length = query.size(1);
     index_t nonzeros = indices.size(-1);
-    TORCH_CHECK(indptr.size(-1) == seq_length + 1);
+    TORCH_CHECK(indptr.size(1) == seq_length + 1);
     auto output = torch::zeros_like(indices, query.options());
 
     // format
@@ -46,7 +47,9 @@ torch::Tensor sddmm_forward_cuda(
         CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO,
         CUDA_R_32F
     ));
-    CUSPARSE_CHECK(cusparseCsrSetStridedBatch(target, batch_size, 0, nonzeros));
+    CUSPARSE_CHECK(
+        cusparseCsrSetStridedBatch(target, batch_size, seq_length + 1, nonzeros)
+    );
     auto handle = at::cuda::getCurrentCUDASparseHandle();
 
     // transpose

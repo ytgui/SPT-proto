@@ -11,31 +11,25 @@ def get_input(batch_size: int,
     cuda_device = 'cuda'
 
     # mask
-    dense = torch.rand(
+    prob = torch.rand(
         [batch_size, seq_length, seq_length],
+        device=cuda_device
     )
-    for b in range(batch_size):
-        for row in range(seq_length):
-            topk = min(
-                row + 1, seq_length // 8
-            )
-            topk_output = torch.topk(
-                dense[b, row, :(row + 1)],
-                k=topk, dim=-1, largest=True
-            )
-            dense[b, row] = torch.scatter(
-                torch.zeros_like(dense[b, row]),
-                dim=-1, index=topk_output.indices,
-                src=topk_output.values
-            )
-    dense = dense.to(cuda_device)
+    topk = torch.topk(
+        prob, k=seq_length // 8, dim=-1,
+        largest=True, sorted=False
+    )
+    dense = torch.scatter(
+        torch.zeros_like(prob), dim=-1,
+        index=topk.indices, src=topk.values
+    )
 
     # sparse
     sparse = dense.to_sparse_csr()
     indptr = sparse.crow_indices()
     indices = sparse.col_indices()
     sparse_csr = [
-        indptr[0].type(torch.int32),
+        indptr.type(torch.int32),
         indices.type(torch.int32),
         sparse.values().type(torch.float)
     ]
@@ -77,10 +71,7 @@ def test_spmm():
     assert torch.allclose(y_1, y_2, atol=1e-3)
     assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
     grad_a_1 = torch.where(
-        dense != 0.0, grad_a_1, 0.0
-    )
-    indptr = torch.expand_copy(
-        indptr.view(1, -1), size=[indices.size(0), -1]
+        dense > 0.0, grad_a_1, 0.0
     )
     grad_a_2 = torch.sparse_csr_tensor(
         indptr, col_indices=indices, values=grad_a_2

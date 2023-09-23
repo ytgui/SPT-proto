@@ -9,38 +9,25 @@ def get_input(batch_size: int, seq_length: int):
     cuda_device = 'cuda'
 
     # mask
-    x = torch.randn(
-        [batch_size, seq_length, 16],
+    prob = torch.rand(
+        [batch_size, seq_length, seq_length],
         device=cuda_device
     )
-    dense = torch.matmul(
-        x, x.transpose(-1, -2)
-    )
-    dense = torch.clamp(
-        dense, min=-5.0, max=5.0
-    )
-    mask = torch.tril(
-        torch.ones_like(
-            dense, dtype=torch.bool
-        )
-    )
-    dense = torch.where(mask, dense, -5.0)
     topk = torch.topk(
-        dense, k=seq_length // 8, dim=-1,
+        prob, k=seq_length // 8, dim=-1,
         largest=True, sorted=False
     )
     dense = torch.scatter(
-        torch.zeros_like(dense), dim=-1,
+        torch.zeros_like(prob), dim=-1,
         index=topk.indices, src=topk.values
     )
-    dense = torch.where(mask, dense, 0.0)
 
     # sparse
     sparse = dense.to_sparse_csr()
     indptr = sparse.crow_indices()
     indices = sparse.col_indices()
     sparse_csr = [
-        indptr[0].type(torch.int32),
+        indptr.type(torch.int32),
         indices.type(torch.int32),
         sparse.values().type(torch.float)
     ]
@@ -48,7 +35,7 @@ def get_input(batch_size: int, seq_length: int):
 
     # fill -inf
     dense = torch.where(
-        dense != 0.0, dense, float('-inf')
+        dense > 0.0, dense, float('-inf')
     )
     dense.requires_grad = True
 
@@ -76,9 +63,6 @@ def test_softmax():
     grad_2 = values.grad.detach().clone()
 
     # check
-    indptr = torch.expand_copy(
-        indptr.view(1, -1), size=[indices.size(0), -1]
-    )
     y_2 = torch.sparse_csr_tensor(
         indptr, col_indices=indices, values=y_2
     )

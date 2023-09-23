@@ -8,40 +8,45 @@ from naive_gpt import kernels
 def get_input(batch_size: int,
               seq_length: int,
               n_features: int):
-    device = 'cuda'
+    cuda_device = 'cuda'
 
     # mask
-    prob = torch.rand(
+    mask = torch.rand(
         [batch_size, seq_length, seq_length],
-        requires_grad=True, device=device
     )
-    topk = torch.topk(
-        prob, k=seq_length // 8, dim=-1,
-        largest=True, sorted=False
-    )
-    mask = torch.scatter(
-        torch.zeros_like(prob),
-        dim=-1, index=topk.indices,
-        src=torch.ones_like(topk.values)
-    )
+    for b in range(batch_size):
+        for row in range(seq_length):
+            topk = min(
+                row + 1, seq_length // 8
+            )
+            topk_output = torch.topk(
+                mask[b, row, :(row + 1)],
+                k=topk, dim=-1, largest=True
+            )
+            mask[b, row] = torch.scatter(
+                torch.zeros_like(mask[b, row]),
+                dim=-1, index=topk_output.indices,
+                src=torch.ones_like(topk_output.values)
+            )
+    mask = mask.to(cuda_device)
 
     # sparse
     sparse = mask.to_sparse_csr()
     indptr = sparse.crow_indices()
     indices = sparse.col_indices()
     sparse_csr = [
-        indptr.type(torch.int32),
+        indptr[0].type(torch.int32),
         indices.type(torch.int32)
     ]
 
     # query and key
     q = torch.randn(
         [batch_size, seq_length, n_features],
-        requires_grad=True, device=device
+        requires_grad=True, device=cuda_device
     )
     k = torch.randn(
         [batch_size, seq_length, n_features],
-        requires_grad=True, device=device
+        requires_grad=True, device=cuda_device
     )
     return mask, sparse_csr, q, k
 
@@ -74,6 +79,9 @@ def test_sddmm():
     grad_k_2 = k.grad.detach().clone()
 
     # check
+    indptr = torch.expand_copy(
+        indptr.view(1, -1), size=[indices.size(0), -1]
+    )
     y_2 = torch.sparse_csr_tensor(
         indptr, col_indices=indices, values=y_2
     )

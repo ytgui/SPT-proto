@@ -8,8 +8,8 @@ class Lookup(autograd.Function):
     def forward(ctx,
                 config: torch.Tensor,
                 query: torch.Tensor,
-                store: torch.Tensor):
-        return ext.lookup_forward_cuda(config, query, store)
+                key: torch.Tensor):
+        return ext.lookup_forward_cuda(config, query, key)
 
     @staticmethod
     def backward(ctx,
@@ -18,7 +18,7 @@ class Lookup(autograd.Function):
 
 
 def lookup(query: torch.Tensor,
-           store: torch.Tensor,
-           sparsity: int):
-    config = torch.empty([sparsity])
-    return Lookup.apply(config, query, store)
+           key: torch.Tensor,
+           sparse_coeff: int):
+    config = torch.empty([sparse_coeff])
+    return Lookup.apply(config, query, key)

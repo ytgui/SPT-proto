@@ -19,7 +19,7 @@ std::vector<torch::Tensor> cdist_backward_cuda(
 
 torch::Tensor lookup_forward_cuda(
     const torch::Tensor &config, const torch::Tensor &query,
-    const torch::Tensor &store
+    const torch::Tensor &key
 );
 
 torch::Tensor spmm_forward_cuda(

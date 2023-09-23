@@ -1,5 +1,6 @@
 import time
 import torch
+import random
 from torch import profiler
 from naive_gpt import kernels
 
@@ -11,6 +12,12 @@ def get_input(n_subspaces: int,
     cuda_device = 'cuda'
 
     #
+    mask = torch.tril(
+        torch.ones(
+            [batch_size, seq_length, seq_length],
+            dtype=torch.bool, device=cuda_device
+        )
+    )
     query = torch.randint(
         high=n_codewords, size=[
             batch_size, seq_length, n_subspaces
@@ -23,39 +30,46 @@ def get_input(n_subspaces: int,
         ],
         dtype=torch.int32, device=cuda_device
     )
-    return query, store
+    return mask, query, store
 
 
 def test_lookup():
-    query, store = get_input(
-        n_subspaces=8, n_codewords=4,
-        seq_length=1024, batch_size=64
+    batch_size = 16
+    n_subspaces = random.choice([8])
+    seq_length = random.choice([512, 1024])
+    mask, query, key = get_input(
+        n_subspaces=n_subspaces, n_codewords=8,
+        seq_length=seq_length, batch_size=batch_size
     )
 
     # builtin
     cmp = torch.eq(
-        query.unsqueeze(-2),
-        store.unsqueeze(-3)
+        query.unsqueeze(-2), key.unsqueeze(-3)
     )
     reduced = torch.sum(cmp, dim=-1)
-    topk_output = torch.topk(
-        reduced, k=reduced.size(-1) // 8, dim=-1
-    )
-    topk_indices = topk_output.indices
-    y_1 = torch.flatten(topk_indices, end_dim=-2)
+    y_1 = torch.where(mask, reduced, -1)
 
     # kernel
-    lookup_indices = kernels.lookup(
-        query, store, sparsity=8
+    y_2: torch.Tensor = kernels.lookup(
+        query, key, sparse_coeff=8
     )
-    y_2 = torch.flatten(lookup_indices, end_dim=-2)
 
     # check
     recall = []
-    assert y_1.size() == y_2.size()
-    for lhs, rhs in zip(y_1.tolist(), y_2.tolist()):
-        count = set(lhs).intersection(rhs)
-        recall.append(len(count) / len(lhs))
+    assert y_1.size(0) == y_2.size(0)
+    assert y_1.size(1) == y_2.size(1)
+    for b in range(batch_size):
+        for row in range(seq_length):
+            k = min(
+                row + 1, seq_length // 8
+            )
+            gt = torch.topk(
+                y_1[b, row, :(row + 1)],
+                k=k, dim=-1, largest=True
+            ).indices.tolist()
+            pred = y_2[b, row, :k].tolist()
+            hit = set(gt).intersection(pred)
+            recall.append(len(hit) / len(gt))
     recall = sum(recall) / len(recall)
     print('recall:', recall)
     assert recall > 0.8
@@ -67,7 +81,7 @@ def test_lookup():
 def bench_lookup():
     batch_size = 64
     n_subspaces = 8
-    query, store = get_input(
+    _, query, key = get_input(
         n_subspaces=n_subspaces, n_codewords=4,
         seq_length=1024, batch_size=batch_size
     )
@@ -101,7 +115,7 @@ def bench_lookup():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            kernels.lookup(query, store, sparsity=8)
+            kernels.lookup(query, key, sparse_coeff=8)
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

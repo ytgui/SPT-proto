@@ -8,7 +8,8 @@ from naive_gpt import kernels
 def get_input(in_blocks: int,
               out_blocks: int,
               block_size: int,
-              batch_size: int):
+              batch_size: int,
+              skip_mask: bool = False):
     cuda_device = 'cuda'
 
     # mask
@@ -42,9 +43,10 @@ def get_input(in_blocks: int,
     )
 
     #
-    mask = mask.type(torch.float)
-    mask = mask.repeat_interleave(block_size, dim=-1)
-    mask = mask.repeat_interleave(block_size, dim=-2)
+    if not skip_mask:
+        mask = mask.type(torch.float)
+        mask = mask.repeat_interleave(block_size, dim=-1)
+        mask = mask.repeat_interleave(block_size, dim=-2)
     x = torch.randn(
         [batch_size, in_blocks * block_size],
         requires_grad=True, device=cuda_device
@@ -97,38 +99,42 @@ def test_blkmv():
 
 
 def bench_blkmv():
-    mask, dense, sparse, x = get_input(
-        in_blocks=16, out_blocks=64,
-        block_size=64
+    config, _, sparse, x = get_input(
+        in_blocks=4, out_blocks=16,
+        block_size=256, batch_size=1024,
+        skip_mask=True
     )
+    indptr, indices, dense = sparse
 
     # dense
     time.sleep(2.0)
     with profiler.profile(
-        activities=[profiler.ProfilerActivity.CPU],
+        activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            y_1 = torch.matmul(
-                torch.multiply(mask, dense), x
-            )
+            y_1 = torch.matmul(x, dense.T)
+            # torch.sum(y_1).backward()
     print(
         prof.key_averages().table(
-            sort_by='cpu_time_total', row_limit=5
+            sort_by='cuda_time_total', row_limit=5
         )
     )
 
     # sparse
     time.sleep(2.0)
     with profiler.profile(
-        activities=[profiler.ProfilerActivity.CPU],
+        activities=[profiler.ProfilerActivity.CUDA],
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            y_2 = torch.sparse.mm(sparse, x)
+            y_2 = kernels.blkmv(
+                config, dense, indptr, indices, x
+            )
+            # torch.sum(y_2).backward()
     print(
         prof.key_averages().table(
-            sort_by='cpu_time_total', row_limit=5
+            sort_by='cuda_time_total', row_limit=5
         )
     )
 
@@ -138,7 +144,7 @@ def bench_blkmv():
 
 def main():
     test_blkmv()
-    # bench_blkmv()
+    bench_blkmv()
 
 
 if __name__ == '__main__':

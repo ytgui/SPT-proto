@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 64
 
 template <typename scalar_t>
 __global__ void bspmv_forward_kernel(

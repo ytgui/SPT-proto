@@ -31,12 +31,12 @@ setup(
             'naive_gpt.ext',
             sources=[
                 'extension/entry.cpp',
-                'extension/blkmv.cpp',
                 'extension/softmax.cu',
                 'extension/cdist.cu',
                 'extension/lookup.cu',
                 'extension/sddmm.cpp',
-                'extension/spmm.cpp'
+                'extension/spmm.cpp',
+                'extension/bspmv.cu'
             ]
         )
     ] if torch.cuda.is_available() else [],

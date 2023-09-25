@@ -4,10 +4,6 @@
 #include <torch/extension.h>
 // clang-format on
 
-torch::Tensor matmul_cuda(
-    const torch::Tensor &left, const torch::Tensor &right
-);
-
 std::vector<torch::Tensor> cdist_forward_cuda(
     const torch::Tensor &query, const torch::Tensor &table
 );
@@ -45,16 +41,8 @@ torch::Tensor softmax_backward_cuda(
     const torch::Tensor &grad_output
 );
 
-torch::Tensor blkmv_forward_cuda(
-    const torch::Tensor &config, const torch::Tensor &dense,
-    const torch::Tensor &indptr, const torch::Tensor &indices,
-    const torch::Tensor &x
-);
-
-std::vector<torch::Tensor> blkmv_backward_cuda(
-    const torch::Tensor &config, const torch::Tensor &dense,
-    const torch::Tensor &indptr, const torch::Tensor &indices,
-    const torch::Tensor &x, const torch::Tensor &grad_output
+torch::Tensor bspmv_forward_cuda(
+    const torch::Tensor &left, const torch::Tensor &right
 );
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -70,7 +58,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // softmax
     m.def("softmax_forward_cuda", &softmax_forward_cuda, "softmax forward");
     m.def("softmax_backward_cuda", &softmax_backward_cuda, "softmax backward");
-    // blkmv
-    m.def("blkmv_forward_cuda", &blkmv_forward_cuda, "blkmv forward");
-    m.def("blkmv_backward_cuda", &blkmv_backward_cuda, "blkmv backward");
+    // bspmv
+    m.def("bspmv_forward_cuda", &bspmv_forward_cuda, "blkmv forward");
 }

@@ -36,6 +36,7 @@ setup(
                 'extension/lookup.cu',
                 'extension/sddmm.cpp',
                 'extension/spmm.cpp',
+                'extension/bspmm.cpp'
             ]
         )
     ] if torch.cuda.is_available() else [],

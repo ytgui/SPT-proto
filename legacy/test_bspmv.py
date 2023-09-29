@@ -9,9 +9,7 @@ from naive_gpt import ext
 class LinearFunction(autograd.Function):
     @staticmethod
     def forward(ctx, x, weight):
-        y = ext.bspmv_forward_cuda(
-            x, weight.T.contiguous()
-        )
+        y = ext.bspmv_forward_cuda(x, weight.T.contiguous())
         return y
 
     @staticmethod
@@ -24,8 +22,8 @@ linear = LinearFunction.apply
 
 def test_fc():
     in_features = 64 * random.randint(1, 16)
-    out_features = 64 * random.randint(1, 64)
-    batch_size = 64 * random.randint(1, 16)
+    out_features = 256 * random.randint(1, 64)
+    batch_size = 256 * random.randint(1, 16)
 
     #
     x = torch.rand(

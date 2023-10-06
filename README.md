@@ -1,16 +1,17 @@
 # naive_gpt
 
-## Kernel
-+ using shared memory
-
 
 ## Features
-| Status | Description                           |
-| ------ | ------------------------------------- |
-| TODO   | decouple v1 and v2 operators |
-| TODO   | finalize routed ffn forward |
+| Status | Description                        |
+| ------ | ---------------------------------- |
+| TODO   | decouple v1 and v2 operators       |
+| TODO   | finalize routed ffn forward        |
+| TODO   | profile MHA v.s. FFN               |
 | TODO   | construct MHA fine-tuning pipeline |
-| TODO   | profile MHA with ablation study |
+| TODO   | profile MHA with ablation study    |
+| TODO   | half precision for sddmm, spmm     |
+| TODO   | half precision for custom kernels  |
+
 
 
 ## Section 5

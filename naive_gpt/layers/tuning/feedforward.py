@@ -67,6 +67,9 @@ class RoutedFFN(nn.Module):
             h[batches, i] = torch.addmm(
                 h_i, x_i, w_i.T, beta=1.0, alpha=1.0
             )
+        h += self.fc1.bias.view(
+            [1, h.size(-2), h.size(-1)]
+        )
         h = self.activation(h)
 
         # fc2
@@ -83,6 +86,7 @@ class RoutedFFN(nn.Module):
             y[batches] = torch.addmm(
                 y_i, h_i, w_i.T, beta=1.0, alpha=1.0
             )
+        y += self.fc2.bias
 
         #
         return y.view(x_size)

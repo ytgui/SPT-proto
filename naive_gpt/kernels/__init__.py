@@ -12,6 +12,3 @@ from .sddmm import sddmm
 
 # spmm
 from .spmm import spmm
-
-# blkmv
-from .blkmv import blkmv

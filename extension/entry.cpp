@@ -60,6 +60,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     // softmax
     m.def("softmax_forward_cuda", &softmax_forward_cuda, "softmax forward");
     m.def("softmax_backward_cuda", &softmax_backward_cuda, "softmax backward");
-    // bspmv
-    m.def("bspmm_forward_cuda", &bspmm_forward_cuda, "bspmm forward");
 }

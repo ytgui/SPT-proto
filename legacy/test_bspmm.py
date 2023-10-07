@@ -55,10 +55,13 @@ class RoutedLinear(nn.Linear):
 
         #
         with torch.no_grad():
-            aaa = ext.bspmm_forward_cuda(x, self.weight, topk.indices)
-
-        #
-        return aaa
+            y = ext.bspmm_forward_cuda(
+                x, self.weight, topk.indices
+            )
+        y = y.view(
+            list(x_size)[:-1] + [self.out_features]
+        )
+        return y
 
 
 def test_moe():
@@ -131,7 +134,7 @@ def bench_moe():
     ).to(cuda_device)
 
     # pre-warm
-    fc_1(x), fc_2(x)
+    # fc_1(x), fc_2(x)
 
     #
     time.sleep(2.0)
@@ -143,11 +146,11 @@ def bench_moe():
             profile_memory=True,
             with_modules=True
     ) as prof:
-        for _ in range(1):
+        for _ in range(20):
             y_1 = fc_1(x)
     print(
         prof.key_averages().table(
-            sort_by='cuda_time_total', row_limit=5
+            sort_by='cpu_time_total', row_limit=5
         )
     )
 
@@ -161,11 +164,11 @@ def bench_moe():
             profile_memory=True,
             with_modules=True
     ) as prof:
-        for _ in range(1):
+        for _ in range(20):
             y_2 = fc_2(x)
     print(
         prof.key_averages().table(
-            sort_by='cuda_time_total', row_limit=5
+            sort_by='cpu_time_total', row_limit=5
         )
     )
 

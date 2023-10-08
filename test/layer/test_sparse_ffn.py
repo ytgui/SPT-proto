@@ -6,7 +6,10 @@ from naive_gpt import layers
 
 class NaiveRoutedFFN(layers.RoutedFFN):
     def forward(self, x: torch.Tensor):
-        assert x.dim() == 2
+        x_size = x.size()
+        x = x.view(
+            [-1, self.in_features]
+        )
 
         # topk
         prob = self.router(x)
@@ -34,50 +37,79 @@ class NaiveRoutedFFN(layers.RoutedFFN):
         )
         h = self.activation(h)
         y = self.fc2(h)
-        return y
+        return y.view(x_size)
 
 
 def test_routed_ffn():
     block_size = 4
     in_features = 8
     out_features = 32
-    batch_size = 16
+    seq_length = 16
+    batch_size = 4
 
     #
     x = torch.randn(
-        [batch_size, in_features],
+        [batch_size, seq_length, in_features],
         requires_grad=True
     )
-    fc_1 = layers.RoutedFFN(
+    ffn_1 = layers.RoutedFFN(
         in_features=in_features,
         out_features=out_features,
         block_size=block_size,
         actication=nn.ReLU()
     )
-    fc_2 = NaiveRoutedFFN(
+    ffn_2 = NaiveRoutedFFN(
         in_features=in_features,
         out_features=out_features,
         block_size=block_size,
         actication=nn.ReLU()
     )
-    fc_2.load_state_dict(
-        state_dict=fc_1.state_dict()
+    ffn_2.load_state_dict(
+        state_dict=ffn_1.state_dict()
     )
 
     #
-    y_1 = fc_1(x)
+    y_1 = ffn_1(x)
     torch.sum(y_1).backward()
-    grad_1 = x.grad.detach().clone()
+    grad_x_1 = x.grad.detach().clone()
+    grad_b1_1 = torch.clone(
+        ffn_1.fc1.bias.grad.detach()
+    )
+    grad_b2_1 = torch.clone(
+        ffn_1.fc2.bias.grad.detach()
+    )
+    grad_w1_1 = torch.clone(
+        ffn_1.fc1.weight.grad.detach()
+    )
+    grad_w2_1 = torch.clone(
+        ffn_1.fc2.weight.grad.detach()
+    )
 
     #
     x.grad.zero_()
-    y_2 = fc_2(x)
+    y_2 = ffn_2(x)
     torch.sum(y_2).backward()
-    grad_2 = x.grad.detach().clone()
+    grad_b1_2 = torch.clone(
+        ffn_2.fc1.bias.grad.detach()
+    )
+    grad_b2_2 = torch.clone(
+        ffn_2.fc2.bias.grad.detach()
+    )
+    grad_w1_2 = torch.clone(
+        ffn_2.fc1.weight.grad.detach()
+    )
+    grad_w2_2 = torch.clone(
+        ffn_2.fc2.weight.grad.detach()
+    )
+    grad_x_2 = x.grad.detach().clone()
 
     # check
     assert torch.allclose(y_1, y_2, atol=1e-3)
-    assert torch.allclose(grad_1, grad_2, atol=1e-3)
+    assert torch.allclose(grad_x_1, grad_x_2, atol=1e-3)
+    assert torch.allclose(grad_b1_1, grad_b1_2, atol=1e-3)
+    assert torch.allclose(grad_b2_1, grad_b2_2, atol=1e-3)
+    assert torch.allclose(grad_w1_1, grad_w1_2, atol=1e-3)
+    assert torch.allclose(grad_w2_1, grad_w2_2, atol=1e-3)
 
     #
     print('[PASS] test_routed_ffn()')
@@ -91,20 +123,20 @@ def bench_routed_ffn():
     cuda_device = 'cuda'
 
     #
-    fc_1 = layers.Feedforward(
+    ffn_1 = layers.Feedforward(
         d_model=in_features,
         d_feedforward=out_features,
         activation=nn.ReLU(),
         p_dropout=0.0
     )
-    fc_2 = layers.RoutedFFN(
+    ffn_2 = layers.RoutedFFN(
         in_features=in_features,
         out_features=out_features,
         block_size=block_size,
         actication=nn.ReLU()
     )
-    fc_1 = fc_1.to(cuda_device)
-    fc_2 = fc_2.to(cuda_device)
+    ffn_1 = ffn_1.to(cuda_device)
+    ffn_2 = ffn_2.to(cuda_device)
     x = torch.randn(
         [batch_size, in_features],
         device=cuda_device
@@ -112,9 +144,10 @@ def bench_routed_ffn():
 
     # pre-warm
     for _ in range(20):
-        y_1, y_2 = fc_1(x), fc_2(x)
+        y_1, y_2 = ffn_1(x), ffn_2(x)
         torch.sum(y_1).backward()
         torch.sum(y_2).backward()
+    torch.cuda.synchronize()
 
     # full
     time.sleep(2.0)
@@ -127,8 +160,9 @@ def bench_routed_ffn():
             with_modules=True
     ) as prof:
         for _ in range(20):
-            y_1 = fc_1(x)
-            # torch.sum(y_1).backward()
+            y_1 = ffn_1(x)
+            torch.sum(y_1).backward()
+            torch.cuda.synchronize()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -146,8 +180,9 @@ def bench_routed_ffn():
             with_modules=True
     ) as prof:
         for _ in range(20):
-            y_2 = fc_2(x)
-            # torch.sum(y_2).backward()
+            y_2 = ffn_2(x)
+            torch.sum(y_2).backward()
+            torch.cuda.synchronize()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

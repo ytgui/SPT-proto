@@ -6,14 +6,15 @@
 | ------ | ----------------------------------- |
 | TODO   | decouple v1 and v2 operators        |
 | PASS   | finalize routed ffn forward         |
-| TODO   | profile MHA v.s. FFN                |
+| PASS   | profile MHA v.s. FFN                |
+| TODO   | profiler for peak and alloc mem     |
 | TODO   | construct MHA fine-tuning pipeline  |
 | TODO   | profile MHA with ablation study     |
 | TODO   | half precision for sddmm, spmm      |
 | TODO   | half precision for custom kernels   |
 | TODO   | an index2group kernel may be needed |
 | TODO   | optimize ffn backward latency       |
-| TODO   | build and test LLaMa2 model         |
+| TODO   | build and test LLaMa2 model (NT)    |
 
 
 

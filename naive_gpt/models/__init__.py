@@ -1,2 +1,5 @@
 # OPT Model
-from .dense_opt import OPTModel
+from .opt import OPTModel
+
+# LLaMa Model
+from .llama import LLaMAModel

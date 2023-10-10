@@ -1,3 +1,4 @@
+import copy
 import torch
 from torch import nn
 
@@ -6,17 +7,18 @@ class MultiheadAttention(nn.Module):
     def __init__(self,
                  d_model: int,
                  n_heads: int,
-                 attention_fn: nn.Module):
+                 attention_fn: nn.Module,
+                 bias: bool):
         nn.Module.__init__(self)
         #
         self.d_model = d_model
         self.n_heads = n_heads
         self.attn_fn = attention_fn
         #
-        self.linear_q = nn.Linear(d_model, d_model)
-        self.linear_k = nn.Linear(d_model, d_model)
-        self.linear_v = nn.Linear(d_model, d_model)
-        self.linear_o = nn.Linear(d_model, d_model)
+        self.linear_q = nn.Linear(d_model, d_model, bias=bias)
+        self.linear_k = nn.Linear(d_model, d_model, bias=bias)
+        self.linear_v = nn.Linear(d_model, d_model, bias=bias)
+        self.linear_o = nn.Linear(d_model, d_model, bias=bias)
 
     def forward(self,
                 q: torch.Tensor,
@@ -48,26 +50,30 @@ class MultiheadAttention(nn.Module):
         return y
 
 
-class VanillaTransformerBlock(nn.Module):
+class TransformerBlock(nn.Module):
     def __init__(self,
                  d_model: int,
                  n_heads: int,
+                 layernorm_fn: nn.Module,
                  attention_fn: nn.Module,
                  feedforward_fn: nn.Module,
+                 attention_bias: bool,
                  pre_norm: bool):
         nn.Module.__init__(self)
         #
         self.pre_norm = pre_norm
-        # connection 1
+        # mha
         self.mha = MultiheadAttention(
             d_model=d_model,
             n_heads=n_heads,
-            attention_fn=attention_fn
+            attention_fn=attention_fn,
+            bias=attention_bias
         )
-        self.norm1 = nn.LayerNorm(d_model)
-        # connection 2
+        # ffn
         self.ffd = feedforward_fn
-        self.norm2 = nn.LayerNorm(d_model)
+        # norm
+        self.norm1 = copy.deepcopy(layernorm_fn)
+        self.norm2 = copy.deepcopy(layernorm_fn)
 
     def forward(self,
                 x: torch.Tensor,

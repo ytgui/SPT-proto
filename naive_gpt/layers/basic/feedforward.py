@@ -7,7 +7,7 @@ class Feedforward(nn.Module):
                  d_model: int,
                  d_feedforward: int,
                  p_dropout: float,
-                 activation: nn.Module = nn.SiLU()):
+                 activation: nn.Module):
         nn.Module.__init__(self)
         #
         self.fc = nn.Sequential(
@@ -21,26 +21,26 @@ class Feedforward(nn.Module):
         return self.fc(x)
 
 
-class ConvFeedforward(nn.Module):
+class LLaMaFeedforward(nn.Module):
     def __init__(self,
                  d_model: int,
                  d_feedforward: int,
                  p_dropout: float,
-                 activation: nn.Module = nn.SiLU()):
+                 activation: nn.Module):
         nn.Module.__init__(self)
         #
-        self.fc = nn.Sequential(
-            nn.Conv2d(
-                d_model, d_feedforward,
-                kernel_size=3, stride=1, padding=1
-            ),
-            nn.Dropout2d(p=p_dropout),
-            activation,
-            nn.Conv2d(
-                d_feedforward, d_model,
-                kernel_size=3, stride=1, padding=1
-            )
+        self.gate = nn.Linear(
+            d_model, d_feedforward, bias=False
         )
+        self.side = nn.Linear(
+            d_model, d_feedforward, bias=False
+        )
+        self.down = nn.Linear(
+            d_feedforward, d_model, bias=False
+        )
+        self.activation = activation
 
     def forward(self, x: torch.Tensor):
-        return self.fc(x)
+        return self.down(
+            self.activation(self.gate(x)) * self.side(x)
+        )

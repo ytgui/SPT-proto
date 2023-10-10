@@ -8,7 +8,8 @@ from .basic.multihead import MultiheadAttention
 
 # Feed-forward
 from .basic.feedforward import Feedforward
+from .basic.feedforward import LLaMaFeedforward
 from .tuning.feedforward import RoutedFFN
 
 # Transformer
-from .basic.transformer import VanillaTransformerBlock
+from .basic.transformer import TransformerBlock

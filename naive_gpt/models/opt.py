@@ -1,7 +1,7 @@
 import copy
 import torch
 from torch import nn
-from naive_torch import layers
+from naive_gpt import layers
 
 
 class OPTBase(nn.Module):
@@ -12,17 +12,11 @@ class OPTBase(nn.Module):
                  n_layers: int,
                  max_length: int,
                  vocab_size: int,
-                 d_embedding: int,
                  block: nn.Module):
         nn.Module.__init__(self)
         # embeddings
-        self.embedding = nn.Sequential(
-            nn.Embedding(
-                vocab_size, embedding_dim=d_embedding
-            ),
-            nn.Linear(d_embedding, d_model)
-            if d_embedding != d_model else
-            nn.Identity()
+        self.embedding = nn.Embedding(
+            vocab_size, embedding_dim=d_model
         )
         self.learned_pe = nn.Embedding(
             max_length + self.PE_OFFSET,
@@ -90,7 +84,6 @@ class OPTModel(OPTBase):
                  n_layers: int,
                  max_length: int,
                  vocab_size: int,
-                 d_embedding: int,
                  d_feedforward: int,
                  p_dropout: float):
         OPTBase.__init__(
@@ -99,9 +92,9 @@ class OPTModel(OPTBase):
             n_layers=n_layers,
             max_length=max_length,
             vocab_size=vocab_size,
-            d_embedding=d_embedding,
-            block=layers.VanillaTransformerBlock(
+            block=layers.TransformerBlock(
                 d_model=d_model, n_heads=n_heads,
+                layernorm_fn=nn.LayerNorm(d_model),
                 attention_fn=layers.VanillaAttention(
                     d_head=d_model // n_heads,
                     p_dropout=p_dropout
@@ -112,6 +105,7 @@ class OPTModel(OPTBase):
                     activation=nn.ReLU(),
                     p_dropout=p_dropout
                 ),
+                attention_bias=True,
                 pre_norm=True
             )
         )

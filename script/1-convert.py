@@ -9,7 +9,7 @@ class OPTModel(models.OPTModel):
     def load_pretrained(self, state_dict: dict):
         # embeddings
         self.embedding.load_state_dict({
-            '0.weight': state_dict.pop(
+            'weight': state_dict.pop(
                 'model.decoder.embed_tokens.weight'
             )
         })
@@ -58,6 +58,7 @@ class OPTModel(models.OPTModel):
                 'norm2.bias': layer_state.pop('final_layer_norm.bias'),
                 'norm2.weight': layer_state.pop('final_layer_norm.weight'),
             })
+            assert len(layer_state) == 0
 
         # final norm and output
         self.final_norm.load_state_dict({
@@ -72,29 +73,91 @@ class OPTModel(models.OPTModel):
             'weight': state_dict.pop('lm_head.weight')
         })
 
-        # cleanup
+        # check
+        assert len(state_dict) == 0
+
+
+class LLaMAModel(models.LLaMAModel):
+    def load_pretrained(self, state_dict: dict):
+        # embedding
+        self.embedding.load_state_dict({
+            'weight': state_dict.pop(
+                'model.embed_tokens.weight'
+            )
+        })
+
+        # decoder layers
+        for i, v in enumerate(self.decoders):
+            prefix = 'model.layers.{}.'.format(i)
+
+            # dump states
+            layer_state = {}
+            removed_keys = []
+            for k in state_dict:
+                k: str
+                if not k.startswith(prefix):
+                    continue
+                new_k = k.removeprefix(prefix)
+                layer_state[new_k] = state_dict[k]
+                removed_keys.append(k)
+            for k in removed_keys:
+                state_dict.pop(k)
+
+            #
+            missing_keys = v.load_state_dict({
+                # ffd
+                'ffd.side.weight': layer_state.pop('mlp.up_proj.weight'),
+                'ffd.gate.weight': layer_state.pop('mlp.gate_proj.weight'),
+                'ffd.down.weight': layer_state.pop('mlp.down_proj.weight'),
+                # mha
+                'mha.linear_q.weight': layer_state.pop('self_attn.q_proj.weight'),
+                'mha.linear_k.weight': layer_state.pop('self_attn.k_proj.weight'),
+                'mha.linear_v.weight': layer_state.pop('self_attn.v_proj.weight'),
+                'mha.linear_o.weight': layer_state.pop('self_attn.o_proj.weight'),
+                # norms
+                'norm1.weight': layer_state.pop('input_layernorm.weight'),
+                'norm2.weight': layer_state.pop('post_attention_layernorm.weight')
+            }, strict=False).missing_keys
+            assert len(missing_keys) == 3
+            assert len(layer_state) == 1
+
+        # final norm and output
+        self.final_norm.load_state_dict({
+            'weight': state_dict.pop('model.norm.weight')
+        })
+        self.lm_output.load_state_dict({
+            'weight': state_dict.pop('lm_head.weight')
+        })
+
+        # check
         assert len(state_dict) == 0
 
 
 def convert(name: str):
     # load model
-    OptModel = T.OPTForCausalLM
-    opt = OptModel.from_pretrained(name)
-    state_dict = opt.state_dict()
-    opt.eval()
+    if name.startswith('facebook/opt'):
+        ModelType = OPTModel
+        PretrainedType = T.OPTForCausalLM
+    elif name.startswith('openlm-research/open_llama'):
+        ModelType = LLaMAModel
+        PretrainedType = T.LlamaForCausalLM
+    else:
+        raise NotImplementedError
+    pretrained = PretrainedType.from_pretrained(name)
+    state_dict = pretrained.state_dict()
+    pretrained.eval()
 
     # convert model
     config = {
-        'd_model': opt.config.hidden_size,
-        'n_heads': opt.config.num_attention_heads,
-        'n_layers': opt.config.num_hidden_layers,
-        'p_dropout': opt.config.dropout,
-        'vocab_size': opt.config.vocab_size,
-        'd_embedding': opt.config.word_embed_proj_dim,
-        'd_feedforward': opt.config.ffn_dim,
-        'max_length': opt.config.max_position_embeddings,
+        'd_model': pretrained.config.hidden_size,
+        'n_heads': pretrained.config.num_attention_heads,
+        'n_layers': pretrained.config.num_hidden_layers,
+        'vocab_size': pretrained.config.vocab_size,
+        'd_feedforward': pretrained.config.intermediate_size,
+        'max_length': pretrained.config.max_position_embeddings,
+        'p_dropout': 0.0
     }
-    model = OPTModel(**config)
+    model = ModelType(**config)
     model.load_pretrained(state_dict)
     model.eval()
 
@@ -105,7 +168,7 @@ def convert(name: str):
         high=config['vocab_size'],
         size=[batch_size, seq_length]
     )
-    y_1, y_2 = opt(x)['logits'], model(x)
+    y_1, y_2 = pretrained(x)['logits'], model(x)
     assert torch.allclose(
         y_1, y_2, atol=1e-5, rtol=1e-3
     )
@@ -129,10 +192,13 @@ def convert(name: str):
 
 
 def main():
+    # facebook/opt-125m
+    # facebook/opt-1.3b
+    # openlm-research/open_llama_3b_v2
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--name', help='specify model name or path',
-        default='facebook/opt-125m'
+        '--name', default='openlm-research/open_llama_3b_v2',
+        help='specify model name or path'
     )
     args = parser.parse_args()
     convert(name=args.name)

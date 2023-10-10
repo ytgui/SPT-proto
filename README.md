@@ -7,14 +7,13 @@
 | TODO   | keep v1 and v2 attention block     |
 | TODO   | construct MHA fine-tuning pipeline |
 | TODO   | profile MHA with ablation study    |
-| TODO   | load and convert LLaMa2 layers     |
-| TODO   | build and test LLaMa2 model (NT)   |
 
 
 ## Known Issues
 | Status | Description                           |
 | ------ | ------------------------------------- |
 | TODO   | cuda 11.x has no half precision SDDMM |
+| TODO   | Llama 2 is not available in CN or HK  |
 
 
 ## Section 5

@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils import data
 import pytorch_lightning as L
 from torchtext import transforms
-from naive_torch import datasets, layers
+from naive_gpt import layers, loaders
 
 
 class JsonLoader(nn.Module):
@@ -39,7 +39,8 @@ class AlpacaDataModule(L.LightningDataModule):
                  root: str,
                  seq_length: int,
                  batch_size: int,
-                 num_workers: int):
+                 num_workers: int,
+                 tokenizer: str):
         super().__init__()
         #
         self.root = root
@@ -48,9 +49,12 @@ class AlpacaDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         #
         AT = transformers.AutoTokenizer
-        self.tokenizer = AT.from_pretrained(
-            'facebook/opt-125m'
-        )
+        if tokenizer == 'opt':
+            tokenizer = 'facebook/opt-1.3b'
+        elif tokenizer == 'llama':
+            tokenizer = 'openlm-research/open_llama_7b'
+        self.tokenizer = AT.from_pretrained(tokenizer)
+        self.pad_value = self.tokenizer.pad_token_id
 
     def _dataloader(self, mode: str):
         datafile = {
@@ -70,14 +74,14 @@ class AlpacaDataModule(L.LightningDataModule):
             layers.FnModule(
                 self.tokenizer.encode
             ),
-            datasets.ClampPadding(
+            loaders.ClampPadding(
                 seq_length=self.seq_length,
-                pad_value=0x01
+                pad_value=self.pad_value
             ),
             transforms.ToTensor()
         )
         return data.DataLoader(
-            datasets.LineReader(
+            loaders.LineReader(
                 root=self.root,
                 files=datafile[mode],
                 shuffle=True,

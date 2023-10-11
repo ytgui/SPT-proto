@@ -13,6 +13,7 @@ def test_alpaca():
         '/Public/Datasets/text/',
         seq_length=seq_length + 1,
         batch_size=batch_size,
+        tokenizer='opt',
         num_workers=1
     )
     loader = dm.train_dataloader()
@@ -23,10 +24,13 @@ def test_alpaca():
     # decode
     tokenizer = dm.tokenizer
     for sample in batch:
+        assert len(sample) == seq_length
         text = tokenizer.decode(sample)
         assert alpaca_prefix in text
-        assert '<pad>' in text
-        assert '</s>' in text
+        encoded = tokenizer.encode(text)
+        union = set(sample.tolist()).union(encoded)
+        inter = set(sample.tolist()).intersection(encoded)
+        assert abs(len(inter) - len(union)) < 10
 
     #
     print('[PASS] test_alpaca()')

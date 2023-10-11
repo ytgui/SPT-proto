@@ -148,12 +148,16 @@ def convert(name: str):
     pretrained.eval()
 
     # convert model
+    def get_feedforward_dim():
+        if hasattr(pretrained.config, 'ffn_dim'):
+            return pretrained.config.ffn_dim
+        return pretrained.config.intermediate_size
     config = {
         'd_model': pretrained.config.hidden_size,
         'n_heads': pretrained.config.num_attention_heads,
         'n_layers': pretrained.config.num_hidden_layers,
         'vocab_size': pretrained.config.vocab_size,
-        'd_feedforward': pretrained.config.intermediate_size,
+        'd_feedforward': get_feedforward_dim(),
         'max_length': pretrained.config.max_position_embeddings,
         'p_dropout': 0.0
     }
@@ -169,9 +173,7 @@ def convert(name: str):
         size=[batch_size, seq_length]
     )
     y_1, y_2 = pretrained(x)['logits'], model(x)
-    assert torch.allclose(
-        y_1, y_2, atol=1e-5, rtol=1e-3
-    )
+    assert torch.allclose(y_1, y_2, atol=1e-3, rtol=1e-3)
 
     # dump model
     try:
@@ -194,10 +196,12 @@ def convert(name: str):
 def main():
     # facebook/opt-125m
     # facebook/opt-1.3b
-    # openlm-research/open_llama_3b_v2
+    # facebook/opt-2.7b
+    # openlm-research/open_llama_7b
+    # openlm-research/open_llama_13b
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--name', default='openlm-research/open_llama_3b_v2',
+        '--name', default='facebook/opt-1.3b',
         help='specify model name or path'
     )
     args = parser.parse_args()

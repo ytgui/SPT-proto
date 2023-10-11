@@ -1,8 +1,16 @@
-import time
+import os
 import torch
 import argparse
 from torch import nn
-from naive_gpt import layers, models
+from naive_gpt import loaders, layers, models
+
+
+def find_sigma(table: list, ratio: float):
+    for i, v in enumerate(table):
+        if v < ratio:
+            continue
+        print('{:.2f} sigma: {}'.format(ratio, i))
+        break
 
 
 def svd_last_ffn(model: nn.Module):
@@ -23,14 +31,6 @@ def svd_last_ffn(model: nn.Module):
         if param.dim() == 1:
             continue
         fc_weights.append(param)
-
-    # find sigma
-    def find_sigma(table: list, ratio: float):
-        for i, v in enumerate(table):
-            if v < ratio:
-                continue
-            print('{:.2f} sigma: {}'.format(ratio, i))
-            break
 
     # svd decompose
     for w in fc_weights:
@@ -65,22 +65,65 @@ def svd_ffn_hidden(model: nn.Module):
             continue
         last_ffd = module
 
-    #
-    return
+    # callback
+    def on_forward(module: nn.Linear,
+                   args: list[torch.Tensor],
+                   output: torch.Tensor):
+        for x in [args[0][0], output[0]]:
+            print('x_size:', x.size())
+            _, sigma, _ = torch.svd(x)
+            print('sigma_size:', sigma.size())
+            cum_sigma = torch.cumsum(sigma, dim=-1)
+            cumsum_ratio = cum_sigma / torch.sum(sigma)
+            cumsum_ratio = cumsum_ratio.tolist()
+            print(
+                'cumsum(sigma) / sum(sigma):', [
+                    '{}: {:.2f}'.format(i, v)
+                    for i, v in enumerate(cumsum_ratio)
+                ]
+            )
+            find_sigma(table=cumsum_ratio, ratio=0.50)
+            find_sigma(table=cumsum_ratio, ratio=0.75)
+            find_sigma(table=cumsum_ratio, ratio=0.80)
+            find_sigma(table=cumsum_ratio, ratio=0.90)
+
+    # linears
+    for module in last_ffd.modules():
+        module: nn.Module
+        if not isinstance(module, nn.Linear):
+            continue
+        module.register_forward_hook(on_forward)
+
+    # loader
+    x = None
+    dm = loaders.WikitextDataModule(
+        root=os.getenv('HOME') +
+        '/Public/Datasets/text/',
+        seq_length=512, batch_size=1,
+        tokenizer='opt', num_workers=1
+    )
+    for batch in dm.train_dataloader():
+        x = batch
+        assert batch.size(0) == 1
+        # skip non-full sequence
+        if x[0][-1] != dm.pad_value:
+            break
+
+    # run once
+    model(x)
 
 
 def evaluate(ckpt_path: str):
     ckpt = torch.load(f=ckpt_path)
     if ckpt_path.find('opt') > 0:
         model = models.OPTModel(**ckpt['config'])
-    elif ckpt_path.find('llama') > 0:
-        model = models.LLaMAModel(**ckpt['config'])
     else:
         raise NotImplementedError
     model.load_state_dict(ckpt['state_dict'])
+    model.eval()
 
     # ffn
-    # svd_last_ffn(model=model)
+    svd_last_ffn(model=model)
 
     # hidden
     svd_ffn_hidden(model=model)
@@ -90,7 +133,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--ckpt', help='specify model path',
-        default='.data/opt-2.7b.ckpt'
+        default='.data/opt-1.3b.ckpt'
     )
     args = parser.parse_args()
     evaluate(ckpt_path=args.ckpt)

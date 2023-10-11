@@ -26,6 +26,7 @@ class WikitextDataModule(L.LightningDataModule):
         elif tokenizer == 'llama':
             tokenizer = 'openlm-research/open_llama_7b'
         self.tokenizer = AT.from_pretrained(tokenizer)
+        self.pad_value = self.tokenizer.pad_token_id
 
     def _dataloader(self, mode: str):
         datafile = {
@@ -46,7 +47,7 @@ class WikitextDataModule(L.LightningDataModule):
             ),
             loaders.ClampPadding(
                 seq_length=self.seq_length,
-                pad_value=0x01
+                pad_value=self.pad_value
             ),
             transforms.ToTensor()
         )

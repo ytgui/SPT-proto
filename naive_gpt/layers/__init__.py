@@ -1,3 +1,6 @@
+# wrapper
+from .basic.wrapper import FnModule
+
 # PQ
 from .tuning.quantizer import PQ
 

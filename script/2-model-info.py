@@ -1,4 +1,73 @@
-# 1. Not Tuned
-# 2. Full Tuning
-# 3. LoRA Tuning
-# 4. Sp-LoRA Tuning
+import torch
+import argparse
+from naive_gpt import models, tuning
+
+
+def show_info(ckpt_path: str, method: str, d_lora: int):
+    print('ckpt_path: {}, tuning: {}, d_lora: {}'.format(
+        ckpt_path, method, d_lora
+    ))
+
+    # model
+    ckpt = torch.load(f=ckpt_path)
+    if ckpt_path.find('opt') > 0:
+        model = models.OPTModel(**ckpt['config'])
+    elif ckpt_path.find('llama') > 0:
+        model = models.LLaMAModel(**ckpt['config'])
+    else:
+        raise NotImplementedError
+    model.load_state_dict(ckpt['state_dict'])
+    model.eval()
+
+    # tuning
+    if method == 'full':
+        pass
+    elif method == 'lora':
+        upgrader = tuning.ModuleUpgrader(
+            handler=tuning.LoRAHandler(
+                lora_r=d_lora,
+                lora_dropout=0.0
+            )
+        )
+        model = upgrader.visit(model)
+    elif method == 'sparse':
+        raise NotImplementedError
+    else:
+        raise RuntimeError
+
+    # parameters
+    trainable = 0
+    non_trainable = 0
+    for param in model.parameters():
+        param: torch.Tensor
+        if param.requires_grad:
+            trainable += param.numel()
+        else:
+            non_trainable += param.numel()
+    print('trainable: {:.1f}M'.format(trainable / (2 ** 20)))
+    print('non_trainable: {:.1f}M'.format(non_trainable / (2 ** 20)))
+
+    #
+    return
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--ckpt', help='specify model path',
+        default='.data/opt-2.7b.ckpt'
+    )
+    parser.add_argument(
+        '--tuning', default='full',
+        help='specify no, full, lora, or sparse'
+    )
+    parser.add_argument(
+        '--d_lora', help='dim oflow rank adaptation',
+        default=16
+    )
+    args = parser.parse_args()
+    show_info(ckpt_path=args.ckpt, method=args.tuning, d_lora=args.d_lora)
+
+
+if __name__ == '__main__':
+    main()

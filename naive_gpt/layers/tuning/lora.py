@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from naive_gpt import layers
 
 
 class LoRABase(nn.Module):
@@ -41,6 +42,8 @@ class LoRALinear(nn.Linear):
             out_features=out_features,
             bias=bias, *args, **kwargs
         )
+        for param in self.parameters():
+            param.requires_grad = False
         # LoRA
         self.lora = LoRABase(
             d_model=d_model,
@@ -48,9 +51,6 @@ class LoRALinear(nn.Linear):
             out_features=out_features,
             p_dropout=lora_dropout
         )
-        if self.bias is not None:
-            self.bias.requires_grad = False
-        self.weight.requires_grad = False
 
     @staticmethod
     def from_pretrained(d_model: int,
@@ -97,6 +97,8 @@ class LoRAEmbedding(nn.Embedding):
             embedding_dim=embedding_dim,
             *args, **kwargs
         )
+        for param in self.parameters():
+            param.requires_grad = False
         # LoRA
         self.lora = LoRABase(
             d_model=d_model,
@@ -104,7 +106,6 @@ class LoRAEmbedding(nn.Embedding):
             out_features=embedding_dim,
             p_dropout=lora_dropout
         )
-        self.weight.requires_grad = False
 
     @staticmethod
     def from_pretrained(d_model: int,
@@ -134,3 +135,114 @@ class LoRAEmbedding(nn.Embedding):
             x, weight=self.weight
         )
         return x + h
+
+
+class LoRARoutedFFN(layers.RoutedFFN):
+    def __init__(self,
+                 d_model: int,
+                 block_size: int,
+                 in_features: int,
+                 out_features: int,
+                 lora_dropout: float,
+                 actication: nn.Module,
+                 bias: bool = True):
+        layers.RoutedFFN.__init__(
+            self,
+            block_size=block_size,
+            in_features=in_features,
+            out_features=out_features,
+            actication=actication,
+            bias=bias
+        )
+        for param in self.parameters():
+            param.requires_grad = False
+        # LoRA
+        self.lora1 = LoRABase(
+            d_model=d_model,
+            in_features=in_features,
+            out_features=out_features,
+            p_dropout=lora_dropout
+        )
+        self.lora2 = LoRABase(
+            d_model=d_model,
+            in_features=out_features,
+            out_features=in_features,
+            p_dropout=lora_dropout
+        )
+
+    @staticmethod
+    def from_pretrained(d_model: int,
+                        p_dropout: float,
+                        source: layers.RoutedFFN):
+        assert isinstance(source, layers.RoutedFFN)
+        model = LoRARoutedFFN(
+            d_model=d_model,
+            block_size=source.block_size,
+            in_features=source.in_features,
+            out_features=source.out_features,
+            actication=source.activation,
+            lora_dropout=p_dropout
+        )
+        output = model.load_state_dict(
+            source.state_dict(), strict=False
+        )
+        if len(output.missing_keys) != 4:
+            raise RuntimeError
+        return model
+
+    def forward(self, x: torch.Tensor):
+        x_size = x.size()
+
+        # lora
+        weight_1 = self.lora1.dropout(
+            torch.matmul(
+                self.lora1.right.weight,
+                self.lora1.left.weight.T
+            )
+        ) + self.fc1.weight
+        weight_2 = self.lora1.dropout(
+            torch.matmul(
+                self.lora2.right.weight,
+                self.lora2.left.weight.T
+            )
+        ) + self.fc2.weight
+
+        # route
+        x = x.view(
+            [-1, self.in_features]
+        )
+        prob = self.router(x)
+        topk = torch.topk(
+            prob, k=self.n_blocks // 4,
+            dim=-1, sorted=False
+        )
+        indices = topk.indices.tolist()
+
+        # grouping
+        grouping: list[list] = [
+            [] for _ in range(self.n_blocks)
+        ]
+        for b, items in enumerate(indices):
+            for expert in items:
+                grouping[expert].append(b)
+
+        #
+        h = layers.RoutedLinearRow.apply(
+            x,
+            self.fc1.bias.view(
+                [self.n_blocks, self.block_size]
+            ),
+            weight_1.view(
+                [self.n_blocks, self.block_size, -1]
+            ),
+            grouping
+        )
+        h = self.activation(h)
+        y = layers.RoutedLinearCol.apply(
+            h, self.fc2.bias,
+            weight_2.view(
+                [-1, self.n_blocks, self.block_size]
+            ),
+            grouping
+        )
+        return y.view(x_size)

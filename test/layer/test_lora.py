@@ -87,9 +87,51 @@ def test_lora_embedding():
     print('[PASS] test_lora_embedding()')
 
 
+def test_lora_routed():
+    d_model = random.randint(1, 16)
+    in_features = random.randint(1, 256)
+    block_size = 16 * random.randint(1, 4)
+    out_features = block_size * random.randint(1, 4)
+    batch_size = random.randint(1, 64)
+
+    # init
+    x = torch.randn(
+        [batch_size, in_features]
+    )
+    model_1 = layers.RoutedFFN(
+        block_size=block_size,
+        in_features=in_features,
+        out_features=out_features,
+        actication=nn.SiLU()
+    )
+    model_2 = layers.LoRARoutedFFN.from_pretrained(
+        d_model, p_dropout=0.0, source=model_1
+    )
+
+    # lora zero output
+    y_1 = model_1(x)
+    y_2 = model_2(x)
+    assert torch.allclose(
+        y_1, y_2, atol=1e-5, rtol=1e-3
+    )
+
+    # freeze parameters
+    parameters = list(
+        filter(
+            lambda v: v.requires_grad,
+            model_2.parameters()
+        )
+    )
+    assert len(parameters) == 4
+
+    #
+    print('[PASS] test_lora_routed()')
+
+
 def main():
     test_lora_linear()
     test_lora_embedding()
+    test_lora_routed()
 
 
 if __name__ == '__main__':

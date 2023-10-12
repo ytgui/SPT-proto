@@ -13,6 +13,10 @@ from .basic.multihead import MultiheadAttention
 # Feed-forward
 from .basic.feedforward import Feedforward
 from .basic.feedforward import LLaMaFeedforward
+
+# Routed FFN
+from .sparse.feedforward import RoutedLinearRow
+from .sparse.feedforward import RoutedLinearCol
 from .sparse.feedforward import RoutedFFN
 
 # Transformer
@@ -21,3 +25,4 @@ from .basic.transformer import TransformerBlock
 # LoRA
 from .tuning.lora import LoRALinear
 from .tuning.lora import LoRAEmbedding
+from .tuning.lora import LoRARoutedFFN

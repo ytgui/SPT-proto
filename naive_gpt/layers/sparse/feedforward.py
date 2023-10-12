@@ -2,7 +2,7 @@ import torch
 from torch import nn, autograd
 
 
-class RoutedFunctionRow(autograd.Function):
+class RoutedLinearRow(autograd.Function):
     @staticmethod
     def forward(ctx,
                 x: torch.Tensor,
@@ -63,7 +63,7 @@ class RoutedFunctionRow(autograd.Function):
         return grad_x, grad_bias, grad_weight, None
 
 
-class RoutedFunctionCol(autograd.Function):
+class RoutedLinearCol(autograd.Function):
     @staticmethod
     def forward(ctx,
                 x: torch.Tensor,
@@ -176,7 +176,7 @@ class RoutedFFN(nn.Module):
                 grouping[expert].append(b)
 
         #
-        h = RoutedFunctionRow.apply(
+        h = RoutedLinearRow.apply(
             x,
             self.fc1.bias.view(
                 [self.n_blocks, self.block_size]
@@ -187,7 +187,7 @@ class RoutedFFN(nn.Module):
             grouping
         )
         h = self.activation(h)
-        y = RoutedFunctionCol.apply(
+        y = RoutedLinearCol.apply(
             h, self.fc2.bias,
             self.fc2.weight.view(
                 [-1, self.n_blocks, self.block_size]

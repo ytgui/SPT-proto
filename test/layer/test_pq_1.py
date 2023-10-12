@@ -13,8 +13,8 @@ def test_pq_basic():
     cuda_device = 'cuda'
 
     #
-    for PQModule in [layers.PQV1,
-                     layers.PQV2]:
+    for PQModule in [layers.PQv1,
+                     layers.PQv2]:
         mse_fn = nn.MSELoss()
         quantizer = PQModule(
             d_codeword=d_codeword,

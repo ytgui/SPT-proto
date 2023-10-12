@@ -113,6 +113,7 @@ def svd_ffn_hidden(model: nn.Module):
     model(x)
 
 
+@torch.no_grad()
 def evaluate(ckpt_path: str):
     ckpt = torch.load(f=ckpt_path)
     if ckpt_path.find('opt') > 0:
@@ -133,7 +134,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--ckpt', help='specify model path',
-        default='.data/opt-1.3b.ckpt'
+        default='.data/opt-2.7b.ckpt'
     )
     args = parser.parse_args()
     evaluate(ckpt_path=args.ckpt)

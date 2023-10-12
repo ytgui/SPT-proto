@@ -8,18 +8,18 @@ def test_pq_basic():
     d_codeword = random.choice([4, 8, 16])
     n_codewords = 64 * random.randint(1, 4)
     n_queries = 64 * random.randint(1, 16)
-    n_subspaces = random.randint(1, 16)
+    n_subspaces = random.choice([8, 16])
     d_model = n_subspaces * d_codeword
     cuda_device = 'cuda'
 
     #
-    for loss_method in ['vq-vae', 'k-means']:
+    for PQModule in [layers.PQV1,
+                     layers.PQV2]:
         mse_fn = nn.MSELoss()
-        quantizer = layers.PQ(
+        quantizer = PQModule(
             d_codeword=d_codeword,
             n_codewords=n_codewords,
-            n_subspaces=n_subspaces,
-            method=loss_method
+            n_subspaces=n_subspaces
         ).to(cuda_device)
 
         #

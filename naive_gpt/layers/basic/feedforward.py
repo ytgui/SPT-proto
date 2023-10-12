@@ -25,7 +25,6 @@ class LLaMaFeedforward(nn.Module):
     def __init__(self,
                  d_model: int,
                  d_feedforward: int,
-                 p_dropout: float,
                  activation: nn.Module):
         nn.Module.__init__(self)
         #

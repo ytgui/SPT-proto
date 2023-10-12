@@ -3,12 +3,12 @@ from torch import nn
 from naive_gpt import kernels
 
 
-class PQ(nn.Module):
+class PQBase(nn.Module):
     def __init__(self,
                  d_codeword: int,
                  n_codewords: int,
                  n_subspaces: int,
-                 method: str = 'k-means'):
+                 method: str):
         nn.Module.__init__(self)
         #
         self.method = method
@@ -51,18 +51,20 @@ class PQ(nn.Module):
         if mode == 'decode':
             indices = z_flat
         else:
-            if self.weight.is_cpu:
+            if self.method == 'v1':
                 distance = torch.cdist(
                     z_flat, self.weight, p=1.0
                 )
                 indices = torch.argmin(
                     distance, dim=-1, keepdim=True
                 )
-            else:
+            elif self.method == 'v2':
                 distance, indices = kernels.cdist(
                     z_flat, table=self.weight
                 )
                 indices = indices.unsqueeze(-1)
+            else:
+                raise RuntimeError
         assert indices.dim() == 3
 
         # encode
@@ -72,6 +74,7 @@ class PQ(nn.Module):
             return indices.contiguous()
 
         # z_q: centroids
+        indices = indices.type(torch.long)
         z_q_flat = torch.gather(
             self.weight, dim=1, index=indices.expand(
                 size=[-1, -1, self.d_codeword]
@@ -88,29 +91,46 @@ class PQ(nn.Module):
         if mode != 'train':
             raise RuntimeError
 
-        if self.method == 'vq-vae':
-            loss = self.loss_fn(
-                z_q, target=z.detach()
-            ) + 0.5 * self.loss_fn(
-                z, target=z_q.detach()
-            )
-
-        elif self.method == 'k-means':
-            distance = torch.clamp(
-                distance, min=1e-5
-            )
-            attention = torch.softmax(
-                -torch.log(distance), dim=-1
-            )
-            z_w = torch.matmul(attention, self.weight)
-            # minimize soft and hard centroids
-            loss_w = self.loss_fn(z_w, target=z_q_flat)
-            # minimize input to hard centroids
-            loss_q = self.loss_fn(z_flat, target=z_q_flat)
-            loss = loss_w + loss_q
-
-        else:
-            raise RuntimeError
+        distance = torch.clamp(
+            distance, min=1e-5
+        )
+        attention = torch.softmax(
+            -torch.log(distance), dim=-1
+        )
+        z_w = torch.matmul(attention, self.weight)
+        # minimize soft and hard centroids
+        loss_w = self.loss_fn(z_w, target=z_q_flat)
+        # minimize input to hard centroids
+        loss_q = self.loss_fn(z_flat, target=z_q_flat)
+        loss = loss_w + loss_q
 
         #
         return loss
+
+
+class PQV1(PQBase):
+    def __init__(self,
+                 d_codeword: int,
+                 n_codewords: int,
+                 n_subspaces: int):
+        PQBase.__init__(
+            self,
+            d_codeword=d_codeword,
+            n_codewords=n_codewords,
+            n_subspaces=n_subspaces,
+            method='v1'
+        )
+
+
+class PQV2(PQBase):
+    def __init__(self,
+                 d_codeword: int,
+                 n_codewords: int,
+                 n_subspaces: int):
+        PQBase.__init__(
+            self,
+            d_codeword=d_codeword,
+            n_codewords=n_codewords,
+            n_subspaces=n_subspaces,
+            method='v2'
+        )

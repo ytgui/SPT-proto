@@ -103,8 +103,7 @@ class LLaMAModel(LLaMABase):
                 feedforward_fn=layers.LLaMaFeedforward(
                     d_model=d_model,
                     d_feedforward=d_feedforward,
-                    activation=nn.SiLU(),
-                    p_dropout=p_dropout
+                    activation=nn.SiLU()
                 ),
                 attention_bias=False,
                 pre_norm=True

@@ -2,7 +2,8 @@
 from .basic.wrapper import FnModule
 
 # PQ
-from .tuning.quantizer import PQ
+from .basic.quantizer import PQV1
+from .basic.quantizer import PQV2
 
 # Attention
 from .basic.attention import VanillaAttention
@@ -12,7 +13,7 @@ from .basic.multihead import MultiheadAttention
 # Feed-forward
 from .basic.feedforward import Feedforward
 from .basic.feedforward import LLaMaFeedforward
-from .tuning.feedforward import RoutedFFN
+from .sparse.feedforward import RoutedFFN
 
 # Transformer
 from .basic.transformer import TransformerBlock

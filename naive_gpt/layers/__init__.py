@@ -6,6 +6,7 @@ from .basic.quantizer import PQv1
 from .basic.quantizer import PQv2
 
 # Attention
+from .basic.position import RotaryEmbedding
 from .basic.attention import VanillaAttention
 from .basic.attention import RotaryAttention
 from .basic.multihead import MultiheadAttention
@@ -26,3 +27,6 @@ from .basic.transformer import TransformerBlock
 from .tuning.lora import LoRALinear
 from .tuning.lora import LoRAEmbedding
 from .tuning.lora import LoRARoutedFFN
+
+# PQ Attention
+from .basic.attention import VanillaAttentionPQ

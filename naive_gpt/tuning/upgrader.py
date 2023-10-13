@@ -27,7 +27,8 @@ class LoRAHandler:
             p_dropout=self.lora_dropout,
             source=child
         )
-        print('[UPGRADE]', name, type(child).__name__)
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
         return new_model
 
     def onEmbedding(self,
@@ -42,15 +43,60 @@ class LoRAHandler:
             p_dropout=self.lora_dropout,
             source=child
         )
-        print('[UPGRADE]', name, type(child).__name__)
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
         return new_model
+
+
+class SparseLoRAHandler(LoRAHandler):
+    def __init__(self,
+                 lora_r: int,
+                 lora_dropout: float,
+                 stage: int):
+        LoRAHandler.__init__(
+            self, lora_r=lora_r,
+            lora_dropout=lora_dropout
+        )
+        #
+        assert stage in [1, 2]
+        self.stage = stage
+
+    def onLinear(self,
+                 name: str,
+                 child: nn.Linear):
+        assert isinstance(
+            child, nn.Linear
+        )
+        if self.stage != 1:
+            return
+        return LoRAHandler.onLinear(
+            self, name=name, child=child
+        )
+
+    def onVanillaAttention(self,
+                           name: str,
+                           child: layers.VanillaAttention):
+        Module = layers.VanillaAttentionPQ
+        new_model = Module(
+            d_head=child.d_head, p_dropout=child.p_dropout,
+            d_codeword=8, n_codewords=16, n_subspaces=child.d_head // 8
+        )
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
+        return new_model
+
+    def onRotaryAttention(self,
+                          name: str,
+                          child: layers.RotaryAttention):
+        print('[TODO]', name)
+        raise NotImplementedError
 
 
 class ModuleUpgrader:
     def __init__(self,
                  handler: object):
         if not hasattr(handler, 'default'):
-            raise RuntimeError('requires default method')
+            raise RuntimeError('requires default handler')
         self.handler = handler
 
     def visit(self, root: nn.Module) -> nn.Module:
@@ -67,8 +113,9 @@ class ModuleUpgrader:
 
             # upgrade
             new_child = fn(name=name, child=child)
-            if not isinstance(new_child, nn.Module):
+            if new_child is None or new_child is child:
                 continue
+            assert isinstance(new_child, nn.Module)
             named_upgrades[name] = new_child
 
         # replace

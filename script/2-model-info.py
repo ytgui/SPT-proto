@@ -4,9 +4,9 @@ from naive_gpt import models, tuning
 
 
 def show_info(ckpt_path: str, method: str, d_lora: int):
-    print('ckpt_path: {}, tuning: {}, d_lora: {}'.format(
-        ckpt_path, method, d_lora
-    ))
+    print('ckpt_path:', ckpt_path)
+    print('tuning:', method)
+    print('d_lora:', d_lora)
 
     # model
     ckpt = torch.load(f=ckpt_path)
@@ -31,7 +31,15 @@ def show_info(ckpt_path: str, method: str, d_lora: int):
         )
         model = upgrader.visit(model)
     elif method == 'sparse':
-        raise NotImplementedError
+        # TODO: stage 1 + 2
+        upgrader = tuning.ModuleUpgrader(
+            handler=tuning.SparseLoRAHandler(
+                lora_r=d_lora,
+                lora_dropout=0.0,
+                stage=1
+            )
+        )
+        model = upgrader.visit(model)
     else:
         raise RuntimeError
 
@@ -44,8 +52,8 @@ def show_info(ckpt_path: str, method: str, d_lora: int):
             trainable += param.numel()
         else:
             non_trainable += param.numel()
-    print('trainable: {:.1f}M'.format(trainable / (2 ** 20)))
-    print('non_trainable: {:.1f}M'.format(non_trainable / (2 ** 20)))
+    print('trainable: {:.2f}M'.format(trainable / (2 ** 20)))
+    print('non_trainable: {:.2f}M'.format(non_trainable / (2 ** 20)))
 
     #
     return
@@ -58,7 +66,7 @@ def main():
         default='.data/opt-2.7b.ckpt'
     )
     parser.add_argument(
-        '--tuning', default='full',
+        '--tuning', default='sparse',
         help='specify no, full, lora, or sparse'
     )
     parser.add_argument(

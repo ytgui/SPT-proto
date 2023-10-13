@@ -2,15 +2,18 @@
 
 
 ## Features
-| Status | Description                          |
-| ------ | ------------------------------------ |
-| TODO   | construct LoRA + RoutedFFN           |
-| TODO   | profile RoutedFFN for ablation study |
-| TODO   | keep v1 and v2 attention block       |
-| TODO   | construct LoRA + SparseMHA           |
-| TODO   | construct MHA fine-tuning pipeline   |
-| TODO   | profile MHA with ablation study      |
-| TODO   | prepare MMLU evaluation pipeline     |
+| Status | Description                           |
+| ------ | ------------------------------------- |
+| DONE   | construct module upgrader for LoRA    |
+| DONE   | construct LoRA + VanillaBlocks        |
+| DONE   | construct LoRA + RoutedFFN            |
+| TODO   | profile LoRA + FFN for ablation       |
+| TODO   | profile LoRA + RoutedFFN for ablation |
+| TODO   | keep v1 and v2 attention block        |
+| TODO   | construct LoRA + SparseMHA            |
+| TODO   | construct MHA fine-tuning pipeline    |
+| TODO   | profile MHA with ablation study       |
+| TODO   | prepare MMLU evaluation pipeline      |
 
 
 ## Known Issues

@@ -31,4 +31,4 @@ from .tuning.lora import LoRARoutedFFN
 
 # PQ Attention
 from .sparse.attention import SparseVanillaAttentionV1
-
+from .sparse.attention import SparseVanillaAttentionV2

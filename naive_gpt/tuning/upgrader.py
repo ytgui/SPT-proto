@@ -76,6 +76,10 @@ class SparseLoRAHandler(LoRAHandler):
     def onVanillaAttention(self,
                            name: str,
                            child: layers.VanillaAttention):
+        assert self.stage == 1
+        assert isinstance(
+            child, layers.VanillaAttention
+        )
         Module = layers.SparseVanillaAttentionV1
         new_model = Module(
             d_head=child.d_head, p_dropout=child.p_dropout,
@@ -88,6 +92,15 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
+        raise NotImplementedError
+
+    def onSparseVanillaAttentionV1(self,
+                                   name: str,
+                                   child: layers.SparseVanillaAttentionV1):
+        assert self.stage == 2
+        assert isinstance(
+            child, layers.SparseVanillaAttentionV1
+        )
         raise NotImplementedError
 
 

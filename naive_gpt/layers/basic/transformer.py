@@ -70,7 +70,7 @@ class TransformerBlock(nn.Module):
             bias=attention_bias
         )
         # ffn
-        self.ffd = feedforward_fn
+        self.ffd = copy.deepcopy(feedforward_fn)
         # norm
         self.norm1 = copy.deepcopy(layernorm_fn)
         self.norm2 = copy.deepcopy(layernorm_fn)

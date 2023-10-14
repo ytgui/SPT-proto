@@ -2,8 +2,8 @@
 from .basic.wrapper import FnModule
 
 # PQ
-from .basic.quantizer import PQv1
-from .basic.quantizer import PQv2
+from .basic.quantizer import PQV1
+from .basic.quantizer import PQV2
 
 # Attention
 from .basic.position import RotaryEmbedding
@@ -29,4 +29,5 @@ from .tuning.lora import LoRAEmbedding
 from .tuning.lora import LoRARoutedFFN
 
 # PQ Attention
-from .basic.attention import VanillaAttentionPQ
+from .sparse.attention import SparseVanillaAttentionV1
+

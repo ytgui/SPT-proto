@@ -76,7 +76,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onVanillaAttention(self,
                            name: str,
                            child: layers.VanillaAttention):
-        Module = layers.VanillaAttentionPQ
+        Module = layers.SparseVanillaAttentionV1
         new_model = Module(
             d_head=child.d_head, p_dropout=child.p_dropout,
             d_codeword=8, n_codewords=16, n_subspaces=child.d_head // 8
@@ -88,7 +88,6 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
-        print('[TODO]', name)
         raise NotImplementedError
 
 

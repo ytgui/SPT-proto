@@ -108,7 +108,7 @@ class PQBase(nn.Module):
         return loss
 
 
-class PQv1(PQBase):
+class PQV1(PQBase):
     def __init__(self,
                  d_codeword: int,
                  n_codewords: int,
@@ -122,7 +122,7 @@ class PQv1(PQBase):
         )
 
 
-class PQv2(PQBase):
+class PQV2(PQBase):
     def __init__(self,
                  d_codeword: int,
                  n_codewords: int,

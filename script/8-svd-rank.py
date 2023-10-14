@@ -116,7 +116,7 @@ def svd_ffn_hidden(model: nn.Module):
 @torch.no_grad()
 def evaluate(ckpt_path: str):
     ckpt = torch.load(f=ckpt_path)
-    if ckpt_path.find('opt') > 0:
+    if ckpt_path.find('opt') != -1:
         model = models.OPTModel(**ckpt['config'])
     else:
         raise NotImplementedError

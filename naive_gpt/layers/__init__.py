@@ -1,5 +1,6 @@
-# wrapper
-from .basic.wrapper import FnModule
+# utils
+from .basic.utils import FnModule
+from .basic.utils import LlamaRMSNorm
 
 # PQ
 from .basic.quantizer import PQV1

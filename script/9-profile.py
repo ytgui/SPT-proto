@@ -12,10 +12,17 @@ def load_model(name: str,
     cuda_device = 'cuda'
 
     #
-    if name == 'facebook/opt-1.3b':
-        n_heads = 32
-        d_model = 2048
-        d_feedforward = 4 * 2048
+    if name.find('opt') != -1:
+        if name == 'facebook/opt-1.3b':
+            n_heads = 32
+            d_model = 2048
+            d_feedforward = 8192
+        elif name == 'facebook/opt-2.7b':
+            n_heads = 32
+            d_model = 2560
+            d_feedforward = 10240
+        else:
+            raise NotImplementedError
 
         #
         def loader():
@@ -25,13 +32,15 @@ def load_model(name: str,
             )
         #
         if module == 'mha':
-            model = layers.VanillaTransformerBlock(
+            model = layers.TransformerBlock(
                 d_model=d_model, n_heads=n_heads,
+                layernorm_fn=nn.LayerNorm(d_model),
                 attention_fn=layers.VanillaAttention(
                     d_head=d_model // n_heads,
                     p_dropout=0.0
                 ),
                 feedforward_fn=nn.Identity(),
+                attention_bias=True,
                 pre_norm=True
             )
             return loader, model.to(cuda_device)
@@ -45,6 +54,49 @@ def load_model(name: str,
             return loader, model.to(cuda_device)
         else:
             raise NotImplementedError
+
+    if name.find('llama') != -1:
+        if name == 'openlm-research/open_llama_7b':
+            n_heads = 32
+            d_model = 4096
+            d_feedforward = 11008
+        elif name == 'openlm-research/open_llama_13b':
+            n_heads = 32
+            d_model = 5120
+            d_feedforward = 13824
+        else:
+            raise NotImplementedError
+
+        #
+        def loader():
+            return torch.randn(
+                [batch_size, seq_length, d_model],
+                requires_grad=True, device=cuda_device
+            )
+        #
+        if module == 'mha':
+            model = layers.TransformerBlock(
+                d_model=d_model, n_heads=n_heads,
+                layernorm_fn=layers.LlamaRMSNorm(d_model),
+                attention_fn=layers.RotaryAttention(
+                    d_head=d_model // n_heads,
+                    p_dropout=0.0
+                ),
+                feedforward_fn=nn.Identity(),
+                attention_bias=False,
+                pre_norm=True
+            )
+            return loader, model.to(cuda_device)
+        elif module == 'ffn':
+            model = layers.LLaMaFeedforward(
+                d_model=d_model,
+                d_feedforward=d_feedforward,
+                activation=nn.SiLU()
+            )
+            return loader, model.to(cuda_device)
+        else:
+            raise NotImplementedError
+
     else:
         raise NotImplementedError
 

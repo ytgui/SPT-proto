@@ -1,8 +1,8 @@
 #include "common.h"
 
 std::vector<torch::Tensor> csr2csc_cuda(
-    const torch::Tensor &config, const torch::Tensor &indptr,
-    const torch::Tensor &indices, const torch::Tensor &values
+    const torch::Tensor &indptr, const torch::Tensor &indices,
+    const torch::Tensor &values
 ) {
     CHECK_DIM(indptr, 2);
     CHECK_DIM(indices, 2);
@@ -15,7 +15,6 @@ std::vector<torch::Tensor> csr2csc_cuda(
     auto handle = at::cuda::getCurrentCUDASparseHandle();
 
     // sizes
-    index_t n_cols = config.size(0);
     index_t n_rows = indptr.size(-1) - 1;
     index_t nonzeros = indices.size(-1);
     auto rev_indptr = torch::zeros_like(indptr);
@@ -26,7 +25,7 @@ std::vector<torch::Tensor> csr2csc_cuda(
     for (auto i = 0; i < indptr.size(0); i += 1) {
         size_t external_size;
         CUSPARSE_CHECK(cusparseCsr2cscEx2_bufferSize(
-            handle, n_rows, n_cols, nonzeros,
+            handle, n_rows, n_rows, nonzeros,
             values.data_ptr<float>() + i * nonzeros,
             indptr.data_ptr<index_t>() + i * (n_rows + 1),
             indices.data_ptr<index_t>() + i * nonzeros,
@@ -38,7 +37,7 @@ std::vector<torch::Tensor> csr2csc_cuda(
         ));
         auto buffer = torch::zeros({external_size}, values.options());
         CUSPARSE_CHECK(cusparseCsr2cscEx2(
-            handle, n_rows, n_cols, nonzeros,
+            handle, n_rows, n_rows, nonzeros,
             values.data_ptr<float>() + i * nonzeros,
             indptr.data_ptr<index_t>() + i * (n_rows + 1),
             indices.data_ptr<index_t>() + i * nonzeros,

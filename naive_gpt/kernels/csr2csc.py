@@ -8,11 +8,9 @@ class CSR2CSC(autograd.Function):
     def forward(ctx,
                 indptr: torch.Tensor,
                 indices: torch.Tensor,
-                values: torch.Tensor,
-                n_cols: int):
-        config = torch.empty([n_cols])
+                values: torch.Tensor):
         output = ext.csr2csc_cuda(
-            config, indptr, indices, values
+            indptr, indices, values
         )
         return output
 
@@ -24,8 +22,7 @@ class CSR2CSC(autograd.Function):
 
 def csr2csc(indptr: torch.Tensor,
             indices: torch.Tensor,
-            values: torch.Tensor,
-            n_cols: int):
+            values: torch.Tensor):
     return CSR2CSC.apply(
-        indptr, indices, values, n_cols
+        indptr, indices, values
     )

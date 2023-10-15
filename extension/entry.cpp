@@ -5,8 +5,8 @@
 // clang-format on
 
 std::vector<torch::Tensor> csr2csc_cuda(
-    const torch::Tensor &config, const torch::Tensor &indptr,
-    const torch::Tensor &indices, const torch::Tensor &values
+    const torch::Tensor &indptr, const torch::Tensor &indices,
+    const torch::Tensor &values
 );
 
 std::vector<torch::Tensor> cdist_forward_cuda(

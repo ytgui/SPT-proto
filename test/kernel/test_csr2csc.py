@@ -14,7 +14,7 @@ def get_input(batch_size: int,
         device=cuda_device
     )
     topk = torch.topk(
-        prob, k=seq_length // 8, dim=-1,
+        prob, k=seq_length // 4, dim=-1,
         largest=True, sorted=False
     )
     dense = torch.scatter(
@@ -40,16 +40,14 @@ def get_input(batch_size: int,
 
 def test_csr2csc():
     batch_size = random.randint(1, 16)
-    seq_length = random.randint(1, 64)
+    seq_length = 16 * random.randint(1, 64)
     dense, sparse_csr = get_input(
         batch_size=batch_size, seq_length=seq_length
     )
     indptr, indices, values = sparse_csr
 
     # to csc
-    output = kernels.csr2csc(
-        indptr, indices, values, n_cols=seq_length
-    )
+    output = kernels.csr2csc(indptr, indices, values)
     rev_indptr, rev_indices, rev_values = output
 
     # check
@@ -79,8 +77,7 @@ def bench_csr2csc():
     ) as prof:
         for _ in range(20):
             kernels.csr2csc(
-                indptr, indices,
-                values, n_cols=seq_length
+                indptr, indices, values
             )
             torch.cuda.synchronize()
     print(prof.key_averages().table(

@@ -2,7 +2,7 @@ import time
 import torch
 import argparse
 from torch import nn, profiler
-from naive_gpt import layers
+from naive_gpt import layers, tuning
 
 
 def load_model(name: str,
@@ -102,13 +102,17 @@ def load_model(name: str,
 
 
 def profile(name: str,
+            method: str,
             module: str,
             seq_length: int,
             batch_size: int,
             backward: bool,
-            compile: bool):
+            compile: bool,
+            d_lora: int):
     #
-    print('model:', name, module)
+    print('name:', name)
+    print('tuning:', method)
+    print('module:', module)
     print('seq_length:', seq_length)
     print('batch_size:', batch_size)
     print('backward:', backward)
@@ -118,6 +122,33 @@ def profile(name: str,
     loader, model = load_model(
         name, module, seq_length, batch_size=batch_size
     )
+    # tuning
+    if method == 'full':
+        pass
+    elif method == 'lora':
+        upgrader = tuning.ModuleUpgrader(
+            handler=tuning.LoRAHandler(
+                lora_r=d_lora,
+                lora_dropout=0.0
+            )
+        )
+        model = upgrader.visit(model)
+    elif method == 'sparse':
+        # TODO: stage 1 + 2
+        upgrader = tuning.ModuleUpgrader(
+            handler=tuning.SparseLoRAHandler(
+                lora_r=d_lora,
+                lora_dropout=0.0,
+                stage=1
+            )
+        )
+        model = upgrader.visit(model)
+    else:
+        raise RuntimeError
+    device = loader().device
+    model = model.to(device)
+
+    #
     if compile:
         model = torch.compile(model)
 
@@ -164,6 +195,10 @@ def main():
         help='specify model name or path'
     )
     parser.add_argument(
+        '--tuning', default='lora',
+        help='specify full, lora, or sparse'
+    )
+    parser.add_argument(
         '--module', default='mha',
         help='specify module in mha or ffn'
     )
@@ -183,16 +218,22 @@ def main():
         '--batch_size', default=16, type=int,
         help='specify batch size'
     )
+    parser.add_argument(
+        '--d_lora', help='dim oflow rank adaptation',
+        default=16
+    )
     args = parser.parse_args()
 
     #
     profile(
         name=args.name,
+        method=args.tuning,
         module=args.module,
         seq_length=args.seq_length,
         batch_size=args.batch_size,
         backward=args.backward,
-        compile=args.compile
+        compile=args.compile,
+        d_lora=args.d_lora
     )
 
 

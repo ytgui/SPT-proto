@@ -17,9 +17,10 @@ class CSR2CSC(autograd.Function):
                 values: torch.Tensor,
                 n_cols: int):
         config = torch.empty([n_cols])
-        return ext.csr2csc_cuda(
+        output = ext.csr2csc_cuda(
             config, indptr, indices, values
         )
+        return output
 
     @staticmethod
     def backward(ctx,
@@ -70,35 +71,35 @@ def get_input(batch_size: int,
 
 
 def test_csr2csc():
+    batch_size = random.randint(1, 16)
     seq_length = random.randint(1, 64)
     dense, sparse_csr = get_input(
-        batch_size=random.randint(1, 16),
-        seq_length=seq_length
+        batch_size=batch_size, seq_length=seq_length
     )
     indptr, indices, values = sparse_csr
 
     # to csc
     output = csr2csc(
-        indptr[0], indices[0], values[0], n_cols=seq_length
+        indptr, indices, values, n_cols=seq_length
     )
     rev_indptr, rev_indices, rev_values = output
 
     # check
     y = torch.sparse_csr_tensor(
         rev_indptr, rev_indices, values=rev_values,
-        size=[seq_length, seq_length]
+        size=[batch_size, seq_length, seq_length]
     )
     y = y.to_dense().transpose(-1, -2)
-    assert torch.allclose(y, dense[0], atol=1e-3)
+    assert torch.allclose(y, dense, atol=1e-3)
 
     #
     print('[PASS] test_csr2csc()')
 
 
 def bench_csr2csc():
-    seq_length = 512
+    seq_length = 1024
     _, sparse_csr = get_input(
-        batch_size=16, seq_length=seq_length
+        batch_size=64, seq_length=seq_length
     )
     indptr, indices, values = sparse_csr
 
@@ -110,8 +111,8 @@ def bench_csr2csc():
     ) as prof:
         for _ in range(20):
             y = csr2csc(
-                indptr[0], indices[0],
-                values[0], n_cols=seq_length
+                indptr, indices,
+                values, n_cols=seq_length
             )
             torch.cuda.synchronize()
     print(prof.key_averages().table(

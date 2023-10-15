@@ -94,8 +94,10 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
     def _apply_attn(self,
                     attn: torch.Tensor,
                     v: torch.Tensor):
+        v_size = v.size()
         indptr, indices, values = attn
         v = v.transpose(1, 2).contiguous()
         v = v.view([-1, v.size(-2), v.size(-1)])
         y = kernels.spmm(indptr, indices, values, v)
-        return y
+        y = y.transpose(1, 2).contiguous()
+        return y.view(v_size)

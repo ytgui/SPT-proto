@@ -102,6 +102,7 @@ def bench_lookup():
     ) as prof:
         for _ in range(20):
             torch.matmul(x_1, x_2)
+            torch.cuda.synchronize()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -116,6 +117,7 @@ def bench_lookup():
     ) as prof:
         for _ in range(20):
             kernels.lookup(query, key, sparse_coeff=8)
+            torch.cuda.synchronize()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

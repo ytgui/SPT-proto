@@ -72,8 +72,11 @@ __global__ void lookup_forward_kernel(
     index_t slot = N_SLOTS - 1, cursor = tx;
     index_t offset_b = gz * seq_length * nonzeros;
     for (index_t local_x = tx; local_x < min(gy + 1, nonzeros); local_x += WORKER_SIZE) {
-        while (cursor >= cursors[slot]) {
+        while (slot >= 0 && cursor >= cursors[slot]) {
             slot = slot - 1; cursor = tx;
+        }
+        if (slot < 0) {
+            break;
         }
         output[offset_b + gy * nonzeros + local_x] = indices[ty][slot][cursor];
         cursor = cursor + WORKER_SIZE;

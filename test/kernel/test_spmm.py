@@ -100,6 +100,7 @@ def bench_spmm():
         for _ in range(20):
             y_1 = torch.matmul(dense, x)
             torch.sum(y_1).backward()
+            torch.cuda.synchronize()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5
@@ -117,6 +118,7 @@ def bench_spmm():
                 indptr, indices, values, x=x
             )
             torch.sum(y_2).backward()
+            torch.cuda.synchronize()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

@@ -4,6 +4,11 @@
 #include <torch/extension.h>
 // clang-format on
 
+std::vector<torch::Tensor> csr2csc_cuda(
+    const torch::Tensor &config, const torch::Tensor &indptr,
+    const torch::Tensor &indices, const torch::Tensor &values
+);
+
 std::vector<torch::Tensor> cdist_forward_cuda(
     const torch::Tensor &query, const torch::Tensor &table
 );
@@ -42,6 +47,8 @@ torch::Tensor softmax_backward_cuda(
 );
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    // csc
+    m.def("csr2csc_cuda", &csr2csc_cuda, "csr2csc forward");
     // cdist
     m.def("cdist_forward_cuda", &cdist_forward_cuda, "cdist forward");
     m.def("cdist_backward_cuda", &cdist_backward_cuda, "cdist backward");

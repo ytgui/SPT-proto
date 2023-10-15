@@ -91,7 +91,7 @@ def test_sddmm():
 def bench_sddmm():
     mask, sparse_csr, q, k = get_input(
         batch_size=64, seq_length=1024,
-        n_features=64
+        n_features=128
     )
     indptr, indices = sparse_csr
 

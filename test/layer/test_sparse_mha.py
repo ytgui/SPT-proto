@@ -77,6 +77,8 @@ def bench_sparse_mha():
     for _ in range(20):
         y_1 = dense_fn(q, k, v, attn_mask=None)
         y_2 = sparse_fn(q, k, v, attn_mask=None)
+        torch.sum(y_1).backward()
+        torch.sum(y_2).backward()
         torch.cuda.synchronize()
 
     # full
@@ -91,7 +93,7 @@ def bench_sparse_mha():
     ) as prof:
         for _ in range(20):
             y_1 = dense_fn(q, k, v, attn_mask=None)
-            # torch.sum(y_1).backward()
+            torch.sum(y_1).backward()
             torch.cuda.synchronize()
     print(
         prof.key_averages().table(
@@ -99,7 +101,7 @@ def bench_sparse_mha():
         )
     )
 
-    # routed
+    # sparse
     time.sleep(2.0)
     with profiler.profile(
             activities=[
@@ -111,7 +113,7 @@ def bench_sparse_mha():
     ) as prof:
         for _ in range(20):
             y_2 = sparse_fn(q, k, v, attn_mask=None)
-            # torch.sum(y_2).backward()
+            torch.sum(y_2).backward()
             torch.cuda.synchronize()
     print(
         prof.key_averages().table(

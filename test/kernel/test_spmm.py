@@ -87,7 +87,7 @@ def test_spmm():
 
 def bench_spmm():
     dense, sparse_csr, x = get_input(
-        64, seq_length=1024, n_features=64
+        64, seq_length=1024, n_features=128
     )
     indptr, indices, values = sparse_csr
 

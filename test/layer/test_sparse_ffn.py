@@ -43,7 +43,7 @@ class NaiveRoutedFFN(layers.RoutedFFN):
 def test_routed_ffn():
     block_size = 4
     in_features = 8
-    out_features = 32
+    out_features = 64
     seq_length = 16
     batch_size = 4
 
@@ -116,7 +116,7 @@ def test_routed_ffn():
 
 
 def bench_routed_ffn():
-    block_size = 512
+    block_size = 1024
     in_features = 2048
     out_features = 8192
     batch_size = 16 * 512
@@ -148,6 +148,21 @@ def bench_routed_ffn():
         torch.sum(y_1).backward()
         torch.sum(y_2).backward()
     torch.cuda.synchronize()
+
+    # simple full
+    torch.cuda.synchronize()
+    before = time.time()
+    y_1 = ffn_1(x)
+    torch.cuda.synchronize()
+    print('timing 0', 1000.0 * (time.time() - before))
+
+    # simple routed
+    time.sleep(2.0)
+    torch.cuda.synchronize()
+    before = time.time()
+    y_2 = ffn_2(x)
+    torch.cuda.synchronize()
+    print('timing 1', 1000.0 * (time.time() - before))
 
     # full
     time.sleep(2.0)

@@ -17,8 +17,6 @@ from .basic.feedforward import Feedforward
 from .basic.feedforward import LLaMaFeedforward
 
 # Routed FFN
-from .sparse.feedforward import RoutedLinearRow
-from .sparse.feedforward import RoutedLinearCol
 from .sparse.feedforward import RoutedFFN
 
 # Transformer

@@ -12,3 +12,6 @@ from .sddmm import sddmm
 
 # spmm
 from .spmm import spmm
+
+# transpose
+from .csr2csc import csr2csc

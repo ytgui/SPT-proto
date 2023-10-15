@@ -1,40 +1,8 @@
-import torch
-from torch import autograd
-from naive_gpt import ext
-
 import time
 import torch
 import random
 from torch import profiler
 from naive_gpt import kernels
-
-
-class CSR2CSC(autograd.Function):
-    @staticmethod
-    def forward(ctx,
-                indptr: torch.Tensor,
-                indices: torch.Tensor,
-                values: torch.Tensor,
-                n_cols: int):
-        config = torch.empty([n_cols])
-        output = ext.csr2csc_cuda(
-            config, indptr, indices, values
-        )
-        return output
-
-    @staticmethod
-    def backward(ctx,
-                 grad_output: torch.Tensor):
-        raise NotImplementedError
-
-
-def csr2csc(indptr: torch.Tensor,
-            indices: torch.Tensor,
-            values: torch.Tensor,
-            n_cols: int):
-    return CSR2CSC.apply(
-        indptr, indices, values, n_cols
-    )
 
 
 def get_input(batch_size: int,
@@ -79,7 +47,7 @@ def test_csr2csc():
     indptr, indices, values = sparse_csr
 
     # to csc
-    output = csr2csc(
+    output = kernels.csr2csc(
         indptr, indices, values, n_cols=seq_length
     )
     rev_indptr, rev_indices, rev_values = output
@@ -110,7 +78,7 @@ def bench_csr2csc():
         profile_memory=True, with_flops=True
     ) as prof:
         for _ in range(20):
-            y = csr2csc(
+            kernels.csr2csc(
                 indptr, indices,
                 values, n_cols=seq_length
             )

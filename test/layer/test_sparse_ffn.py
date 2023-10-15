@@ -116,9 +116,9 @@ def test_routed_ffn():
 
 
 def bench_routed_ffn():
-    block_size = 256
-    in_features = 512
-    out_features = 2048
+    block_size = 512
+    in_features = 2048
+    out_features = 8192
     batch_size = 16 * 512
     cuda_device = 'cuda'
 
@@ -188,6 +188,9 @@ def bench_routed_ffn():
             sort_by='cuda_time_total', row_limit=5
         )
     )
+
+    #
+    print('[PASS] bench_routed_ffn()')
 
 
 def main():

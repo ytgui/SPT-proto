@@ -105,7 +105,7 @@ class PQBase(nn.Module):
         loss = loss_w + loss_q
 
         #
-        return loss
+        return z_q, loss
 
 
 class PQV1(PQBase):

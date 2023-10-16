@@ -3,9 +3,9 @@ import argparse
 from naive_gpt import models, utils
 
 
-def show_info(ckpt_path: str, method: str, d_lora: int):
+def show_info(ckpt_path: str, tuning: str, d_lora: int):
     print('ckpt_path:', ckpt_path)
-    print('tuning:', method)
+    print('tuning:', tuning)
     print('d_lora:', d_lora)
 
     # model
@@ -19,10 +19,10 @@ def show_info(ckpt_path: str, method: str, d_lora: int):
     model.load_state_dict(ckpt['state_dict'])
     model.eval()
 
-    # tuning
-    if method == 'full':
+    # upgrade
+    if tuning == 'full':
         pass
-    elif method == 'lora':
+    elif tuning == 'lora':
         upgrader = utils.ModuleUpgrader(
             handler=utils.LoRAHandler(
                 lora_r=d_lora,
@@ -30,7 +30,7 @@ def show_info(ckpt_path: str, method: str, d_lora: int):
             )
         )
         model = upgrader.visit(model)
-    elif method == 'sparse':
+    elif tuning == 'sparse':
         upgrader = utils.ModuleUpgrader(
             handler=utils.SparseLoRAHandler(
                 lora_r=d_lora,
@@ -62,18 +62,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--ckpt', help='specify model path',
-        default='.data/opt-2.7b.ckpt'
+        default='.data/opt-1.3b.ckpt'
     )
     parser.add_argument(
         '--tuning', default='sparse',
-        help='specify no, full, lora, or sparse'
+        help='specify full, lora, or sparse'
     )
     parser.add_argument(
         '--d_lora', help='dim oflow rank adaptation',
         default=16
     )
     args = parser.parse_args()
-    show_info(ckpt_path=args.ckpt, method=args.tuning, d_lora=args.d_lora)
+    show_info(ckpt_path=args.ckpt, tuning=args.tuning, d_lora=args.d_lora)
 
 
 if __name__ == '__main__':

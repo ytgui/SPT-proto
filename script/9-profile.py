@@ -212,11 +212,11 @@ def main():
         help='specify model name or path'
     )
     parser.add_argument(
-        '--tuning', default='sparse',
+        '--tuning', default='lora',
         help='specify full, lora, or sparse'
     )
     parser.add_argument(
-        '--module', default='ffn',
+        '--module', default='mha',
         help='specify module in mha or ffn'
     )
     parser.add_argument(
@@ -232,7 +232,7 @@ def main():
         help='specify sequence length'
     )
     parser.add_argument(
-        '--batch_size', default=1, type=int,
+        '--batch_size', default=16, type=int,
         help='specify batch size'
     )
     parser.add_argument(

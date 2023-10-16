@@ -7,9 +7,7 @@ from naive_gpt import layers
 class NaiveRoutedFFN(layers.RoutedFFN):
     def forward(self, x: torch.Tensor):
         x_size = x.size()
-        x = x.view(
-            [-1, self.in_features]
-        )
+        x = x.view([-1, self.d_model])
 
         # topk
         prob = self.router(x)
@@ -41,28 +39,28 @@ class NaiveRoutedFFN(layers.RoutedFFN):
 
 
 def test_routed_ffn():
+    d_model = 8
+    d_feedforward = 64
     block_size = 4
-    in_features = 8
-    out_features = 64
     seq_length = 16
     batch_size = 4
 
     #
     x = torch.randn(
-        [batch_size, seq_length, in_features],
+        [batch_size, seq_length, d_model],
         requires_grad=True
     )
     ffn_1 = layers.RoutedFFN(
-        in_features=in_features,
-        out_features=out_features,
+        d_model=d_model,
+        d_feedforward=d_feedforward,
         block_size=block_size,
-        actication=nn.ReLU()
+        activation=nn.ReLU()
     )
     ffn_2 = NaiveRoutedFFN(
-        in_features=in_features,
-        out_features=out_features,
+        d_model=d_model,
+        d_feedforward=d_feedforward,
         block_size=block_size,
-        actication=nn.ReLU()
+        activation=nn.ReLU()
     )
     ffn_2.load_state_dict(
         state_dict=ffn_1.state_dict()
@@ -116,29 +114,30 @@ def test_routed_ffn():
 
 
 def bench_routed_ffn():
+    d_model = 2048
+    d_feedforward = 8192
     block_size = 1024
-    in_features = 2048
-    out_features = 8192
-    batch_size = 16 * 512
+    seq_length = 512
+    batch_size = 16
     cuda_device = 'cuda'
 
     #
     ffn_1 = layers.Feedforward(
-        d_model=in_features,
-        d_feedforward=out_features,
+        d_model=d_model,
+        d_feedforward=d_feedforward,
         activation=nn.ReLU(),
         p_dropout=0.0
     )
     ffn_2 = layers.RoutedFFN(
-        in_features=in_features,
-        out_features=out_features,
+        d_model=d_model,
+        d_feedforward=d_feedforward,
         block_size=block_size,
-        actication=nn.ReLU()
+        activation=nn.ReLU()
     )
     ffn_1 = ffn_1.to(cuda_device)
     ffn_2 = ffn_2.to(cuda_device)
     x = torch.randn(
-        [batch_size, in_features],
+        [batch_size, seq_length, d_model],
         device=cuda_device
     )
 

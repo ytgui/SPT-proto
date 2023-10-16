@@ -106,7 +106,18 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
-        raise NotImplementedError
+        assert self.stage == 1
+        assert isinstance(
+            child, layers.RotaryAttention
+        )
+        Module = layers.SparseRotaryAttentionV1
+        new_model = Module(
+            d_head=child.d_head, p_dropout=child.p_dropout,
+            d_codeword=8, n_codewords=16, n_subspaces=child.d_head // 8
+        )
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
+        return new_model
 
     def onSparseVanillaAttentionV1(self,
                                    name: str,

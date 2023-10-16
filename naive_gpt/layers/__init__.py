@@ -25,8 +25,9 @@ from .basic.transformer import TransformerBlock
 # LoRA
 from .tuning.lora import LoRALinear
 from .tuning.lora import LoRAEmbedding
-from .tuning.lora import LoRARoutedFFN
+from .tuning.lora_ffn import LoRARoutedFFN
 
 # PQ Attention
 from .sparse.attention import SparseVanillaAttentionV1
 from .sparse.attention import SparseVanillaAttentionV2
+from .sparse.attention import SparseRotaryAttentionV1

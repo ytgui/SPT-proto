@@ -101,3 +101,44 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
         y = kernels.spmm(indptr, indices, values, v)
         y = y.transpose(1, 2).contiguous()
         return y.view(v_size)
+
+
+class SparseRotaryAttentionV1(layers.RotaryAttention):
+    def __init__(self,
+                 d_head: int,
+                 p_dropout: float,
+                 d_codeword: int,
+                 n_codewords: int,
+                 n_subspaces: int):
+        layers.RotaryAttention.__init__(
+            self, d_head=d_head,
+            p_dropout=p_dropout
+        )
+        #
+        self.quantizer = layers.PQV1(
+            d_codeword=d_codeword,
+            n_codewords=n_codewords,
+            n_subspaces=n_subspaces
+        )
+
+    def _get_attn(self,
+                  q: torch.Tensor,
+                  k: torch.Tensor,
+                  attn_mask: torch.Tensor):
+        # rotary
+        q = self.embedding(
+            q, ids=self.cached_ids[:q.size(1)]
+        )
+        k = self.embedding(
+            k, ids=self.cached_ids[:k.size(1)]
+        )
+
+        # quantize
+        loss_q = self.quantizer('train', z=q)[-1]
+        loss_k = self.quantizer('train', z=k)[-1]
+        self.register_buffer(
+            'loss', loss_q + loss_k, persistent=False
+        )
+        return layers.VanillaAttention._get_attn(
+            self, q, k, attn_mask=attn_mask
+        )

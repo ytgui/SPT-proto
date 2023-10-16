@@ -1,7 +1,7 @@
 import torch
 import random
 from torch import nn
-from naive_gpt import tuning
+from naive_gpt import utils
 
 
 def test_upgrader():
@@ -66,7 +66,7 @@ def test_upgrader():
                 )
                 return new_child
 
-        upgrader = tuning.ModuleUpgrader(
+        upgrader = utils.ModuleUpgrader(
             handler=ModuleHandler()
         )
         model_2 = upgrader.visit(root=model_2)

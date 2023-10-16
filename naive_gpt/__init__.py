@@ -10,5 +10,5 @@ from . import kernels
 # models
 from . import models
 
-# tuning
-from . import tuning
+# utils
+from . import utils

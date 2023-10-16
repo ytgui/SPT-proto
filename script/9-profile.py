@@ -2,7 +2,7 @@ import time
 import torch
 import argparse
 from torch import nn, profiler
-from naive_gpt import layers, tuning
+from naive_gpt import layers, utils
 
 
 def load_model(name: str,
@@ -45,17 +45,19 @@ def load_model(name: str,
             )
             return loader, model.to(cuda_device)
         elif module == 'ffn':
-            model = layers.Feedforward(
-                d_model=d_model,
-                d_feedforward=d_feedforward,
-                activation=nn.ReLU(),
-                p_dropout=0.0
+            model = nn.Sequential(
+                layers.Feedforward(
+                    d_model=d_model,
+                    d_feedforward=d_feedforward,
+                    activation=nn.ReLU(),
+                    p_dropout=0.0
+                )
             )
             return loader, model.to(cuda_device)
         else:
             raise NotImplementedError
 
-    if name.find('llama') != -1:
+    elif name.find('llama') != -1:
         if name == 'openlm-research/open_llama_7b':
             n_heads = 32
             d_model = 4096
@@ -88,10 +90,12 @@ def load_model(name: str,
             )
             return loader, model.to(cuda_device)
         elif module == 'ffn':
-            model = layers.LLaMaFeedforward(
-                d_model=d_model,
-                d_feedforward=d_feedforward,
-                activation=nn.SiLU()
+            model = nn.Sequential(
+                layers.LLaMaFeedforward(
+                    d_model=d_model,
+                    d_feedforward=d_feedforward,
+                    activation=nn.SiLU()
+                )
             )
             return loader, model.to(cuda_device)
         else:
@@ -102,7 +106,7 @@ def load_model(name: str,
 
 
 def profile(name: str,
-            method: str,
+            tuning: str,
             module: str,
             seq_length: int,
             batch_size: int,
@@ -111,7 +115,7 @@ def profile(name: str,
             d_lora: int):
     #
     print('name:', name)
-    print('tuning:', method)
+    print('tuning:', tuning)
     print('module:', module)
     print('seq_length:', seq_length)
     print('batch_size:', batch_size)
@@ -122,33 +126,33 @@ def profile(name: str,
     loader, model = load_model(
         name, module, seq_length, batch_size=batch_size
     )
-    # tuning
-    if method == 'full':
+    # upgrade
+    if tuning == 'full':
         pass
-    elif method == 'lora':
-        upgrader = tuning.ModuleUpgrader(
-            handler=tuning.LoRAHandler(
+    elif tuning == 'lora':
+        upgrader = utils.ModuleUpgrader(
+            handler=utils.LoRAHandler(
                 lora_r=d_lora,
                 lora_dropout=0.0
             )
         )
         model = upgrader.visit(model)
-    elif method == 'sparse':
-        # TODO: stage 1 + 2
-        upgrader = tuning.ModuleUpgrader(
-            handler=tuning.SparseLoRAHandler(
-                lora_r=d_lora,
-                lora_dropout=0.0,
-                stage=1
+    elif tuning == 'sparse':
+        for stage in [1, 2]:
+            upgrader = utils.ModuleUpgrader(
+                handler=utils.SparseLoRAHandler(
+                    lora_r=d_lora,
+                    lora_dropout=0.0,
+                    stage=stage
+                )
             )
-        )
-        model = upgrader.visit(model)
+            model = upgrader.visit(model)
     else:
         raise RuntimeError
     device = loader().device
     model = model.to(device)
 
-    #
+    # compile
     if compile:
         model = torch.compile(model)
 
@@ -160,6 +164,19 @@ def profile(name: str,
         if not backward:
             continue
         torch.sum(y_1).backward()
+
+    # simple
+    time.sleep(2.0)
+    torch.cuda.synchronize()
+    before = time.time()
+    x = loader()
+    y_1 = model(x)
+    if backward:
+        torch.sum(y_1).backward()
+    torch.cuda.synchronize()
+    print('simple timing: {:.2f}ms'.format(
+        1000.0 * (time.time() - before)
+    ))
 
     # profile
     time.sleep(2.0)
@@ -195,11 +212,11 @@ def main():
         help='specify model name or path'
     )
     parser.add_argument(
-        '--tuning', default='lora',
+        '--tuning', default='sparse',
         help='specify full, lora, or sparse'
     )
     parser.add_argument(
-        '--module', default='mha',
+        '--module', default='ffn',
         help='specify module in mha or ffn'
     )
     parser.add_argument(
@@ -215,7 +232,7 @@ def main():
         help='specify sequence length'
     )
     parser.add_argument(
-        '--batch_size', default=16, type=int,
+        '--batch_size', default=1, type=int,
         help='specify batch size'
     )
     parser.add_argument(
@@ -227,7 +244,7 @@ def main():
     #
     profile(
         name=args.name,
-        method=args.tuning,
+        tuning=args.tuning,
         module=args.module,
         seq_length=args.seq_length,
         batch_size=args.batch_size,

@@ -1,74 +1,70 @@
 import torch
 from torch import nn
 from naive_gpt import layers
-from .lora import LoRABase
 
 
 class LoRARoutedFFN(layers.RoutedFFN):
     def __init__(self,
-                 d_model: int,
+                 d_lora: int,
                  block_size: int,
-                 in_features: int,
-                 out_features: int,
+                 d_model: int,
+                 d_feedforward: int,
                  lora_dropout: float,
-                 actication: nn.Module,
+                 activation: nn.Module,
                  bias: bool = True):
         layers.RoutedFFN.__init__(
             self,
             block_size=block_size,
-            in_features=in_features,
-            out_features=out_features,
-            actication=actication,
+            d_model=d_model,
+            d_feedforward=d_feedforward,
+            activation=activation,
             bias=bias
         )
-        for param in self.parameters():
-            param.requires_grad = False
         # LoRA
-        self.lora1 = LoRABase(
-            d_model=d_model,
-            in_features=in_features,
-            out_features=out_features,
-            p_dropout=lora_dropout
+        self.fc1 = layers.LoRALinear(
+            d_model=d_lora, in_features=d_model,
+            out_features=d_feedforward, lora_dropout=lora_dropout
         )
-        self.lora2 = LoRABase(
-            d_model=d_model,
-            in_features=out_features,
-            out_features=in_features,
-            p_dropout=lora_dropout
+        self.fc2 = layers.LoRALinear(
+            d_model=d_lora, in_features=d_feedforward,
+            out_features=d_model, lora_dropout=lora_dropout
         )
 
     @staticmethod
-    def from_pretrained(d_model: int,
+    def from_pretrained(d_lora: int,
+                        block_size: int,
                         p_dropout: float,
-                        source: layers.RoutedFFN):
-        assert isinstance(source, layers.RoutedFFN)
+                        source: layers.Feedforward):
+        assert isinstance(
+            source, layers.Feedforward
+        )
         model = LoRARoutedFFN(
-            d_model=d_model,
-            block_size=source.block_size,
-            in_features=source.in_features,
-            out_features=source.out_features,
-            actication=source.activation,
+            d_lora=d_lora,
+            block_size=block_size,
+            d_model=source.d_model,
+            d_feedforward=source.d_feedforward,
+            activation=source.activation,
             lora_dropout=p_dropout
         )
         output = model.load_state_dict(
             source.state_dict(), strict=False
         )
-        if len(output.missing_keys) != 4:
+        if len(output.missing_keys) != 2:
             raise RuntimeError
         return model
 
     def forward(self, x: torch.Tensor):
         # lora
-        weight_1 = self.lora1.dropout(
+        weight_1 = self.fc1.lora.dropout(
             torch.matmul(
-                self.lora1.right.weight,
-                self.lora1.left.weight.T
+                self.fc1.lora.right.weight,
+                self.fc1.lora.left.weight.T
             )
         ) + self.fc1.weight
-        weight_2 = self.lora1.dropout(
+        weight_2 = self.fc2.lora.dropout(
             torch.matmul(
-                self.lora2.right.weight,
-                self.lora2.left.weight.T
+                self.fc2.lora.right.weight,
+                self.fc2.lora.left.weight.T
             )
         ) + self.fc2.weight
 

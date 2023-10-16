@@ -126,7 +126,21 @@ class SparseLoRAHandler(LoRAHandler):
         assert isinstance(
             child, layers.SparseVanillaAttentionV1
         )
+        Module = layers.SparseVanillaAttentionV2
         raise NotImplementedError
+
+    def onFeedforward(self,
+                      name: str,
+                      child: layers.Feedforward):
+        if self.stage != 2:
+            print('[SKIP]', name, type(child).__name__)
+            return
+        assert isinstance(child, layers.Feedforward)
+        new_model = layers.LoRARoutedFFN.from_pretrained(
+            d_lora=self.lora_r, block_size=1024,
+            p_dropout=self.lora_dropout, source=child
+        )
+        return new_model
 
 
 class ModuleUpgrader:

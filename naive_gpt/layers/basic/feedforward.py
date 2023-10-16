@@ -10,15 +10,27 @@ class Feedforward(nn.Module):
                  activation: nn.Module):
         nn.Module.__init__(self)
         #
-        self.fc = nn.Sequential(
-            nn.Linear(d_model, d_feedforward),
-            nn.Dropout(p_dropout),
-            activation,
-            nn.Linear(d_feedforward, d_model)
+        self.d_model = d_model
+        self.d_feedforward = d_feedforward
+        self.activation = activation
+        #
+        self.fc1 = nn.Linear(
+            d_model, d_feedforward
         )
+        self.fc2 = nn.Linear(
+            d_feedforward, d_model
+        )
+        self.dropout = nn.Dropout(
+            p=p_dropout
+        )
+        self.activation = activation
 
     def forward(self, x: torch.Tensor):
-        return self.fc(x)
+        h = self.fc1(x)
+        h = self.activation(
+            self.dropout(h)
+        )
+        return self.fc2(h)
 
 
 class LLaMaFeedforward(nn.Module):

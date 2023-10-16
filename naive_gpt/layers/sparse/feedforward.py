@@ -1,33 +1,53 @@
 import torch
 from torch import nn
+from naive_gpt import layers
 
 
 class RoutedFFN(nn.Module):
     def __init__(self,
-                 in_features: int,
-                 out_features: int,
+                 d_model: int,
+                 d_feedforward: int,
                  block_size: int,
-                 actication: nn.Module,
+                 activation: nn.Module,
                  bias: bool = True):
         nn.Module.__init__(self)
         #
+        self.d_model = d_model
         self.block_size = block_size
-        self.in_features = in_features
-        self.out_features = out_features
-        assert out_features % block_size == 0
-        self.n_blocks = out_features // block_size
+        self.d_feedforward = d_feedforward
+        assert d_feedforward % block_size == 0
+        self.n_blocks = d_feedforward // block_size
         #
         self.router = nn.Sequential(
-            nn.Linear(in_features, self.n_blocks),
+            nn.Linear(d_model, self.n_blocks),
             nn.Softmax(dim=-1)
         )
         self.fc1 = nn.Linear(
-            in_features, out_features, bias=bias
+            d_model, d_feedforward, bias=bias
         )
         self.fc2 = nn.Linear(
-            out_features, in_features, bias=bias
+            d_feedforward, d_model, bias=bias
         )
-        self.activation = actication
+        self.activation = activation
+
+    @staticmethod
+    def from_pretrained(block_size: int,
+                        source: layers.Feedforward):
+        assert isinstance(
+            source, layers.Feedforward
+        )
+        model = RoutedFFN(
+            block_size=block_size,
+            d_model=source.d_model,
+            d_feedforward=source.d_feedforward,
+            activation=source.activation,
+        )
+        output = model.load_state_dict(
+            source.state_dict(), strict=False
+        )
+        if len(output.missing_keys) != 2:
+            raise RuntimeError
+        return model
 
     def _apply_ffn(self,
                    x: torch.Tensor,
@@ -37,7 +57,7 @@ class RoutedFFN(nn.Module):
         #
         x_size = x.size()
         x = x.view(
-            [-1, self.in_features]
+            [-1, self.d_model]
         )
         prob = self.router(x)
         topk = torch.topk(

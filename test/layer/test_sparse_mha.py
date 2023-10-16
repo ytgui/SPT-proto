@@ -80,6 +80,21 @@ def bench_sparse_mha():
         torch.sum(y_1).backward()
         torch.sum(y_2).backward()
         torch.cuda.synchronize()
+    
+    # simple full
+    torch.cuda.synchronize()
+    before = time.time()
+    y_1 = dense_fn(q, k, v, attn_mask=None)
+    torch.cuda.synchronize()
+    print('timing 0', 1000.0 * (time.time() - before))
+
+    # simple sparse
+    time.sleep(2.0)
+    torch.cuda.synchronize()
+    before = time.time()
+    y_2 = sparse_fn(q, k, v, attn_mask=None)
+    torch.cuda.synchronize()
+    print('timing 1', 1000.0 * (time.time() - before))
 
     # full
     time.sleep(2.0)

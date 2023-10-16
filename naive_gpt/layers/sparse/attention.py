@@ -14,6 +14,10 @@ class SparseVanillaAttentionV1(layers.VanillaAttention):
             p_dropout=p_dropout
         )
         #
+        self.d_codeword = d_codeword
+        self.n_codewords = n_codewords
+        self.n_subspaces = n_subspaces
+        #
         self.quantizer = layers.PQV1(
             d_codeword=d_codeword,
             n_codewords=n_codewords,
@@ -50,6 +54,23 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
             n_codewords=n_codewords,
             n_subspaces=d_head // d_codeword
         )
+
+    @staticmethod
+    def from_pretrained(lora_dropout: float,
+                        source: SparseVanillaAttentionV1):
+        assert isinstance(
+            source, SparseVanillaAttentionV1
+        )
+        model = layers.SparseVanillaAttentionV2(
+            d_head=source.d_head, d_codeword=source.d_codeword,
+            n_codewords=source.n_codewords, p_dropout=lora_dropout
+        )
+        output = model.load_state_dict(
+            source.state_dict(), strict=False
+        )
+        if len(output.missing_keys) != 0:
+            raise RuntimeError
+        return model
 
     def _get_attn(self,
                   q: torch.Tensor,

@@ -126,8 +126,12 @@ class SparseLoRAHandler(LoRAHandler):
         assert isinstance(
             child, layers.SparseVanillaAttentionV1
         )
-        Module = layers.SparseVanillaAttentionV2
-        raise NotImplementedError
+        new_model = layers.SparseVanillaAttentionV2.from_pretrained(
+            lora_dropout=self.lora_dropout, source=child
+        )
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
+        return new_model
 
     def onFeedforward(self,
                       name: str,

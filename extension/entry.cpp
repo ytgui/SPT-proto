@@ -42,8 +42,7 @@ torch::Tensor softmax_forward_cuda(
 
 torch::Tensor softmax_backward_cuda(
     const torch::Tensor &indptr, const torch::Tensor &indices,
-    const torch::Tensor &values, const torch::Tensor &output,
-    const torch::Tensor &grad_output
+    const torch::Tensor &output, const torch::Tensor &grad_output
 );
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

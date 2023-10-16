@@ -29,7 +29,12 @@ class RoutedFFN(nn.Module):
         )
         self.activation = actication
 
-    def forward(self, x: torch.Tensor):
+    def _apply_ffn(self,
+                   x: torch.Tensor,
+                   bias_1: torch.Tensor,
+                   weight_1: torch.Tensor,
+                   weight_2: torch.Tensor):
+        #
         x_size = x.size()
         x = x.view(
             [-1, self.in_features]
@@ -43,18 +48,6 @@ class RoutedFFN(nn.Module):
 
         #
         y = torch.zeros_like(x)
-        bias = self.fc1.bias.view(
-            [self.n_blocks, self.block_size]
-        )
-        weight_1 = self.fc1.weight.view(
-            [self.n_blocks, self.block_size, -1]
-        )
-        weight_2 = self.fc2.weight.view(
-            [-1, self.n_blocks, self.block_size]
-        )
-        weight_2 = torch.permute(
-            weight_2, dims=[1, 2, 0]
-        ).contiguous()
         for i in range(self.n_blocks):
             cmp = torch.eq(indices, i)
             mask = torch.sum(
@@ -62,7 +55,7 @@ class RoutedFFN(nn.Module):
             )
             # fc1
             x_i = x[mask]
-            b_i, w_i = bias[i], weight_1[i]
+            b_i, w_i = bias_1[i], weight_1[i]
             h = self.activation(
                 torch.addmm(
                     b_i, x_i, w_i.T, beta=1.0, alpha=1.0
@@ -75,3 +68,21 @@ class RoutedFFN(nn.Module):
 
         #
         return y.view(x_size)
+
+    def forward(self, x: torch.Tensor):
+        bias_1 = self.fc1.bias.view(
+            [self.n_blocks, self.block_size]
+        )
+        weight_1 = self.fc1.weight.view(
+            [self.n_blocks, self.block_size, -1]
+        )
+        weight_2 = self.fc2.weight.view(
+            [-1, self.n_blocks, self.block_size]
+        )
+        weight_2 = torch.permute(
+            weight_2, dims=[1, 2, 0]
+        )
+        return self._apply_ffn(
+            x, bias_1=bias_1, weight_1=weight_1,
+            weight_2=weight_2.contiguous()
+        )

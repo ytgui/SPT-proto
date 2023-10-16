@@ -191,8 +191,6 @@ class LoRARoutedFFN(layers.RoutedFFN):
         return model
 
     def forward(self, x: torch.Tensor):
-        x_size = x.size()
-
         # lora
         weight_1 = self.lora1.dropout(
             torch.matmul(
@@ -207,42 +205,20 @@ class LoRARoutedFFN(layers.RoutedFFN):
             )
         ) + self.fc2.weight
 
-        # route
-        x = x.view(
-            [-1, self.in_features]
-        )
-        prob = self.router(x)
-        topk = torch.topk(
-            prob, k=self.n_blocks // 4,
-            dim=-1, sorted=False
-        )
-        indices = topk.indices.tolist()
-
-        # grouping
-        grouping: list[list] = [
-            [] for _ in range(self.n_blocks)
-        ]
-        for b, items in enumerate(indices):
-            for expert in items:
-                grouping[expert].append(b)
-
         #
-        h = layers.RoutedLinearRow.apply(
-            x,
-            self.fc1.bias.view(
-                [self.n_blocks, self.block_size]
-            ),
-            weight_1.view(
-                [self.n_blocks, self.block_size, -1]
-            ),
-            grouping
+        bias_1 = self.fc1.bias.view(
+            [self.n_blocks, self.block_size]
         )
-        h = self.activation(h)
-        y = layers.RoutedLinearCol.apply(
-            h, self.fc2.bias,
-            weight_2.view(
-                [-1, self.n_blocks, self.block_size]
-            ),
-            grouping
+        weight_1 = weight_1.view(
+            [self.n_blocks, self.block_size, -1]
         )
-        return y.view(x_size)
+        weight_2 = weight_2.view(
+            [-1, self.n_blocks, self.block_size]
+        )
+        weight_2 = torch.permute(
+            weight_2, dims=[1, 2, 0]
+        )
+        return self._apply_ffn(
+            x, bias_1=bias_1, weight_1=weight_1,
+            weight_2=weight_2.contiguous()
+        )

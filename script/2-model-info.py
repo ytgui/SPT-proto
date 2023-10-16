@@ -1,6 +1,6 @@
 import torch
 import argparse
-from naive_gpt import models, tuning
+from naive_gpt import models, utils
 
 
 def show_info(ckpt_path: str, method: str, d_lora: int):
@@ -23,17 +23,16 @@ def show_info(ckpt_path: str, method: str, d_lora: int):
     if method == 'full':
         pass
     elif method == 'lora':
-        upgrader = tuning.ModuleUpgrader(
-            handler=tuning.LoRAHandler(
+        upgrader = utils.ModuleUpgrader(
+            handler=utils.LoRAHandler(
                 lora_r=d_lora,
                 lora_dropout=0.0
             )
         )
         model = upgrader.visit(model)
     elif method == 'sparse':
-        # TODO: stage 1 + 2
-        upgrader = tuning.ModuleUpgrader(
-            handler=tuning.SparseLoRAHandler(
+        upgrader = utils.ModuleUpgrader(
+            handler=utils.SparseLoRAHandler(
                 lora_r=d_lora,
                 lora_dropout=0.0,
                 stage=1

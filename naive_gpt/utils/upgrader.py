@@ -68,8 +68,22 @@ class SparseLoRAHandler(LoRAHandler):
             child, nn.Linear
         )
         if self.stage != 1:
+            print('[SKIP]', name, type(child).__name__)
             return
         return LoRAHandler.onLinear(
+            self, name=name, child=child
+        )
+
+    def onEmbedding(self,
+                    name: str,
+                    child: nn.Embedding):
+        assert isinstance(
+            child, nn.Embedding
+        )
+        if self.stage != 1:
+            print('[SKIP]', name, type(child).__name__)
+            return
+        return LoRAHandler.onEmbedding(
             self, name=name, child=child
         )
 

@@ -110,7 +110,13 @@ torch::Tensor lookup_forward_cuda(
 
     // dispatch
     dim3 blocks(1, seq_length / BLOCK_SIZE, batch_size);
-    if (n_subspaces == 8 && nonzeros == 64) {
+    if (n_subspaces == 8 && nonzeros == 32) {
+        dim3 threads(WORKER_SIZE, BLOCK_SIZE);
+        lookup_forward_kernel<8, 32><<<blocks, threads>>>(
+            batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
+            key.data_ptr<index_t>(), output.data_ptr<index_t>()
+        );
+    } else if (n_subspaces == 8 && nonzeros == 64) {
         dim3 threads(WORKER_SIZE, BLOCK_SIZE);
         lookup_forward_kernel<8, 64><<<blocks, threads>>>(
             batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
@@ -119,6 +125,24 @@ torch::Tensor lookup_forward_cuda(
     } else if (n_subspaces == 8 && nonzeros == 128) {
         dim3 threads(WORKER_SIZE, BLOCK_SIZE);
         lookup_forward_kernel<8, 128><<<blocks, threads>>>(
+            batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
+            key.data_ptr<index_t>(), output.data_ptr<index_t>()
+        );
+    } else if (n_subspaces == 16 && nonzeros == 32) {
+        dim3 threads(WORKER_SIZE, BLOCK_SIZE);
+        lookup_forward_kernel<16, 32><<<blocks, threads>>>(
+            batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
+            key.data_ptr<index_t>(), output.data_ptr<index_t>()
+        );
+    } else if (n_subspaces == 16 && nonzeros == 64) {
+        dim3 threads(WORKER_SIZE, BLOCK_SIZE);
+        lookup_forward_kernel<16, 64><<<blocks, threads>>>(
+            batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
+            key.data_ptr<index_t>(), output.data_ptr<index_t>()
+        );
+    } else if (n_subspaces == 16 && nonzeros == 128) {
+        dim3 threads(WORKER_SIZE, BLOCK_SIZE);
+        lookup_forward_kernel<16, 128><<<blocks, threads>>>(
             batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
             key.data_ptr<index_t>(), output.data_ptr<index_t>()
         );

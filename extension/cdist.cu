@@ -222,6 +222,24 @@ std::vector<torch::Tensor> cdist_forward_cuda(
             table.data_ptr<float>(), distance.data_ptr<float>(),
             indices.data_ptr<index_t>()
         );
+    } else if (d_code == 16) {
+        cdist_forward_kernel<float, float4, 16><<<blocks, threads>>>(
+            n_queries, n_codewords, d_code, query.data_ptr<float>(),
+            table.data_ptr<float>(), distance.data_ptr<float>(),
+            indices.data_ptr<index_t>()
+        );
+    } else if (d_code == 24) {
+        cdist_forward_kernel<float, float4, 24><<<blocks, threads>>>(
+            n_queries, n_codewords, d_code, query.data_ptr<float>(),
+            table.data_ptr<float>(), distance.data_ptr<float>(),
+            indices.data_ptr<index_t>()
+        );
+    } else if (d_code == 32) {
+        cdist_forward_kernel<float, float4, 32><<<blocks, threads>>>(
+            n_queries, n_codewords, d_code, query.data_ptr<float>(),
+            table.data_ptr<float>(), distance.data_ptr<float>(),
+            indices.data_ptr<index_t>()
+        );
     } else {
         TORCH_CHECK(false && "d_code not supported");
     }
@@ -270,6 +288,24 @@ std::vector<torch::Tensor> cdist_backward_cuda(
             );
         } else if (d_code == 8) {
             cdist_backward_query_kernel<float, float4, 8><<<blocks, threads>>>(
+                n_queries, n_codewords, d_code, query.data_ptr<float>(),
+                table.data_ptr<float>(), grad_output.data_ptr<float>(),
+                grad_query.data_ptr<float>()
+            );
+        } else if (d_code == 16) {
+            cdist_backward_query_kernel<float, float4, 16><<<blocks, threads>>>(
+                n_queries, n_codewords, d_code, query.data_ptr<float>(),
+                table.data_ptr<float>(), grad_output.data_ptr<float>(),
+                grad_query.data_ptr<float>()
+            );
+        } else if (d_code == 24) {
+            cdist_backward_query_kernel<float, float4, 24><<<blocks, threads>>>(
+                n_queries, n_codewords, d_code, query.data_ptr<float>(),
+                table.data_ptr<float>(), grad_output.data_ptr<float>(),
+                grad_query.data_ptr<float>()
+            );
+        } else if (d_code == 32) {
+            cdist_backward_query_kernel<float, float4, 32><<<blocks, threads>>>(
                 n_queries, n_codewords, d_code, query.data_ptr<float>(),
                 table.data_ptr<float>(), grad_output.data_ptr<float>(),
                 grad_query.data_ptr<float>()

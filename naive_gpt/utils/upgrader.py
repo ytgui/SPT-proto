@@ -163,13 +163,17 @@ class SparseLoRAHandler(LoRAHandler):
         return new_model
 
     def onLLaMaFeedforward(self,
-                      name: str,
-                      child: layers.LLaMaFeedforward):
+                           name: str,
+                           child: layers.LLaMaFeedforward):
         if self.stage != 2:
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(child, layers.LLaMaFeedforward)
-        raise NotImplementedError
+        new_model = layers.LoRARoutedLLaMaFFN.from_pretrained(
+            d_lora=self.lora_r, block_size=child.d_feedforward // 8,
+            p_dropout=self.lora_dropout, source=child
+        )
+        return new_model
 
 
 class ModuleUpgrader:

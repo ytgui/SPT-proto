@@ -126,8 +126,24 @@ class SparseLoRAHandler(LoRAHandler):
         assert isinstance(
             child, layers.SparseVanillaAttentionV1
         )
-        new_model = layers.SparseVanillaAttentionV2.from_pretrained(
-            lora_dropout=self.lora_dropout, source=child
+        Module = layers.SparseVanillaAttentionV2
+        new_model = Module.from_pretrained(
+            source=child
+        )
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
+        return new_model
+
+    def onSparseRotaryAttentionV1(self,
+                                  name: str,
+                                  child: layers.SparseRotaryAttentionV1):
+        assert self.stage == 2
+        assert isinstance(
+            child, layers.SparseRotaryAttentionV1
+        )
+        Module = layers.SparseRotaryAttentionV2
+        new_model = Module.from_pretrained(
+            source=child
         )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)

@@ -31,3 +31,4 @@ from .tuning.lora_ffn import LoRARoutedFFN
 from .sparse.attention import SparseVanillaAttentionV1
 from .sparse.attention import SparseVanillaAttentionV2
 from .sparse.attention import SparseRotaryAttentionV1
+from .sparse.attention import SparseRotaryAttentionV2

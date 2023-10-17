@@ -1,7 +1,7 @@
 import torch
 import random
 from torch import nn
-from naive_gpt import utils
+from naive_gpt import layers, utils
 
 
 def test_upgrader():
@@ -87,8 +87,117 @@ def test_upgrader():
     print('[PASS] test_upgrader()')
 
 
+def test_upgrade_opt():
+    d_lora = random.randint(1, 16)
+    block_size = 16 * random.randint(1, 4)
+    d_model = block_size * random.randint(1, 2)
+    d_feedforward = block_size * random.randint(1, 8)
+    batch_size = random.randint(1, 64)
+
+    # x
+    x = torch.randn(
+        [batch_size, d_model]
+    )
+
+    # model 1
+    model_0 = layers.Feedforward(
+        d_model=d_model,
+        d_feedforward=d_feedforward,
+        activation=nn.SiLU(),
+        p_dropout=0.0
+    )
+    upgrader = utils.ModuleUpgrader(
+        handler=utils.SparseLoRAHandler(
+            lora_r=d_lora,
+            lora_dropout=0.0,
+            stage=1
+        )
+    )
+    model_0 = upgrader.visit(model_0)
+    model_1 = layers.RoutedFFN.from_pretrained(
+        block_size=block_size, source=model_0
+    )
+
+    # model 2
+    model_2 = layers.LoRARoutedFFN.from_pretrained(
+        d_lora, block_size=block_size, p_dropout=0.0, source=model_0
+    )
+    model_2.router.load_state_dict(model_1.router.state_dict())
+
+    # lora zero output
+    y_1, y_2 = model_1(x), model_2(x)
+    assert torch.allclose(y_1, y_2, atol=1e-3)
+
+    # freeze parameters
+    parameters = list(
+        filter(
+            lambda v: v.requires_grad,
+            model_2.parameters()
+        )
+    )
+    assert len(parameters) == 6
+
+    #
+    print('[PASS] test_upgrade_opt()')
+
+
+def test_upgrade_llama():
+    d_lora = random.randint(1, 16)
+    block_size = 16 * random.randint(1, 4)
+    d_model = block_size * random.randint(1, 2)
+    d_feedforward = block_size * random.randint(1, 8)
+    batch_size = random.randint(1, 64)
+
+    # x
+    x = torch.randn(
+        [batch_size, d_model]
+    )
+
+    # model 1
+    model_0 = layers.LLaMaFeedforward(
+        d_model=d_model,
+        d_feedforward=d_feedforward,
+        activation=nn.SiLU()
+    )
+    upgrader = utils.ModuleUpgrader(
+        handler=utils.SparseLoRAHandler(
+            lora_r=d_lora,
+            lora_dropout=0.0,
+            stage=1
+        )
+    )
+    model_0 = upgrader.visit(model_0)
+    model_1 = layers.RoutedLLaMaFFN.from_pretrained(
+        block_size=block_size, source=model_0
+    )
+
+    # model 2
+    model_2 = layers.LoRARoutedLLaMaFFN.from_pretrained(
+        d_lora, block_size=block_size, p_dropout=0.0, source=model_0
+    )
+    model_2.router.load_state_dict(model_1.router.state_dict())
+
+    # lora zero output
+    y_1, y_2 = model_1(x), model_2(x)
+    assert torch.allclose(y_1, y_2, atol=1e-5)
+
+    # freeze parameters
+    parameters = list(
+        filter(
+            lambda v: v.requires_grad,
+            model_2.parameters()
+        )
+    )
+    assert len(parameters) == 8
+
+    #
+    print('[PASS] test_upgrade_llama()')
+
+
 def main():
     test_upgrader()
+    test_upgrade_opt()
+    test_upgrade_llama()
 
 
 if __name__ == '__main__':

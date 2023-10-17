@@ -10,15 +10,14 @@ class LoRARoutedFFN(layers.RoutedFFN):
                  d_model: int,
                  d_feedforward: int,
                  lora_dropout: float,
-                 activation: nn.Module,
-                 bias: bool = True):
+                 activation: nn.Module):
         layers.RoutedFFN.__init__(
             self,
             block_size=block_size,
             d_model=d_model,
             d_feedforward=d_feedforward,
             activation=activation,
-            bias=bias
+            p_dropout=0.0
         )
         # LoRA
         self.fc1 = layers.LoRALinear(
@@ -84,4 +83,94 @@ class LoRARoutedFFN(layers.RoutedFFN):
         return self._apply_ffn(
             x, bias_1=bias_1, weight_1=weight_1,
             weight_2=weight_2.contiguous()
+        )
+
+
+class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
+    def __init__(self,
+                 d_lora: int,
+                 block_size: int,
+                 d_model: int,
+                 d_feedforward: int,
+                 lora_dropout: float,
+                 activation: nn.Module):
+        layers.RoutedLLaMaFFN.__init__(
+            self, d_model, d_feedforward,
+            block_size=block_size, activation=activation
+        )
+        # LoRA
+        self.gate = layers.LoRALinear(
+            d_model=d_lora, in_features=d_model, bias=False,
+            out_features=d_feedforward, lora_dropout=lora_dropout
+        )
+        self.side = layers.LoRALinear(
+            d_model=d_lora, in_features=d_model, bias=False,
+            out_features=d_feedforward, lora_dropout=lora_dropout
+        )
+        self.down = layers.LoRALinear(
+            d_model=d_lora, in_features=d_feedforward, bias=False,
+            out_features=d_model, lora_dropout=lora_dropout
+        )
+
+    @staticmethod
+    def from_pretrained(d_lora: int,
+                        block_size: int,
+                        p_dropout: float,
+                        source: layers.LLaMaFeedforward):
+        assert isinstance(
+            source, layers.LLaMaFeedforward
+        )
+        model = LoRARoutedLLaMaFFN(
+            d_lora=d_lora,
+            block_size=block_size,
+            d_model=source.d_model,
+            d_feedforward=source.d_feedforward,
+            activation=source.activation,
+            lora_dropout=p_dropout
+        )
+        output = model.load_state_dict(
+            source.state_dict(), strict=False
+        )
+        if len(output.missing_keys) != 2:
+            raise RuntimeError
+        return model
+
+    def forward(self, x: torch.Tensor):
+        # lora
+        weight_gate = self.gate.lora.dropout(
+            torch.matmul(
+                self.gate.lora.right.weight,
+                self.gate.lora.left.weight.T
+            )
+        ) + self.gate.weight
+        weight_side = self.side.lora.dropout(
+            torch.matmul(
+                self.side.lora.right.weight,
+                self.side.lora.left.weight.T
+            )
+        ) + self.side.weight
+        weight_down = self.down.lora.dropout(
+            torch.matmul(
+                self.down.lora.right.weight,
+                self.down.lora.left.weight.T
+            )
+        ) + self.down.weight
+
+        #
+        weight_gate = weight_gate.view(
+            [self.n_blocks, self.block_size, -1]
+        )
+        weight_side = weight_side.view(
+            [self.n_blocks, self.block_size, -1]
+        )
+        weight_down = weight_down.view(
+            [-1, self.n_blocks, self.block_size]
+        )
+        weight_down = torch.permute(
+            weight_down, dims=[1, 2, 0]
+        )
+        return self._apply_ffn(
+            x, weight_gate=weight_gate,
+            weight_side=weight_side,
+            weight_down=weight_down.contiguous()
         )

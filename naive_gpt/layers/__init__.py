@@ -18,6 +18,7 @@ from .basic.feedforward import LLaMaFeedforward
 
 # Routed FFN
 from .sparse.feedforward import RoutedFFN
+from .sparse.feedforward import RoutedLLaMaFFN
 
 # Transformer
 from .basic.transformer import TransformerBlock
@@ -26,6 +27,7 @@ from .basic.transformer import TransformerBlock
 from .tuning.lora import LoRALinear
 from .tuning.lora import LoRAEmbedding
 from .tuning.lora_ffn import LoRARoutedFFN
+from .tuning.lora_ffn import LoRARoutedLLaMaFFN
 
 # PQ Attention
 from .sparse.attention import SparseVanillaAttentionV1

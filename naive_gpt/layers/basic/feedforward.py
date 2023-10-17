@@ -13,6 +13,7 @@ class Feedforward(nn.Module):
         self.d_model = d_model
         self.d_feedforward = d_feedforward
         self.activation = activation
+        self.p_dropout = p_dropout
         #
         self.fc1 = nn.Linear(
             d_model, d_feedforward
@@ -39,6 +40,10 @@ class LLaMaFeedforward(nn.Module):
                  d_feedforward: int,
                  activation: nn.Module):
         nn.Module.__init__(self)
+        #
+        self.d_model = d_model
+        self.d_feedforward = d_feedforward
+        self.activation = activation
         #
         self.gate = nn.Linear(
             d_model, d_feedforward, bias=False

@@ -162,12 +162,13 @@ class SparseLoRAHandler(LoRAHandler):
         )
         return new_model
 
-    def onFeedforward(self,
+    def onLLaMaFeedforward(self,
                       name: str,
                       child: layers.LLaMaFeedforward):
         if self.stage != 2:
             print('[SKIP]', name, type(child).__name__)
             return
+        assert isinstance(child, layers.LLaMaFeedforward)
         raise NotImplementedError
 
 

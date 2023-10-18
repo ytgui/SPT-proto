@@ -1,7 +1,7 @@
 import torch
 import transformers
+import lightning as L
 from torch.utils import data
-import pytorch_lightning as L
 from torchtext import transforms
 from naive_gpt import loaders, layers
 

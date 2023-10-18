@@ -1,9 +1,9 @@
 import torch
 import transformers
+import lightning as L
 from torch.utils import data
-import pytorch_lightning as L
 from torchtext import transforms
-from naive_torch import datasets, layers
+from naive_gpt import loaders, layers
 
 
 class MMLUDataModule(L.LightningDataModule):

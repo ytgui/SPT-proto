@@ -39,10 +39,10 @@ class OPTModel(models.OPTModel):
             # feedforwards
             v.load_state_dict({
                 # ffd
-                'ffd.fc.0.bias': layer_state.pop('fc1.bias'),
-                'ffd.fc.0.weight': layer_state.pop('fc1.weight'),
-                'ffd.fc.3.bias': layer_state.pop('fc2.bias'),
-                'ffd.fc.3.weight': layer_state.pop('fc2.weight'),
+                'ffd.fc1.bias': layer_state.pop('fc1.bias'),
+                'ffd.fc1.weight': layer_state.pop('fc1.weight'),
+                'ffd.fc2.bias': layer_state.pop('fc2.bias'),
+                'ffd.fc2.weight': layer_state.pop('fc2.weight'),
                 # mha
                 'mha.linear_q.bias': layer_state.pop('self_attn.q_proj.bias'),
                 'mha.linear_q.weight': layer_state.pop('self_attn.q_proj.weight'),

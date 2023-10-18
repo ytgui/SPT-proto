@@ -2,14 +2,10 @@
 
 
 ## Features
-| Status | Description                           |
-| ------ | ------------------------------------- |
-| TODO   | profile LoRA + FFN for ablation       |
-| TODO   | profile LoRA + RoutedFFN for ablation |
-| DONE   | keep v1 and v2 attention block        |
-| TODO   | construct MHA fine-tuning pipeline    |
-| TODO   | profile MHA with ablation study       |
-| TODO   | prepare MMLU evaluation pipeline      |
+| Status | Description                          |
+| ------ | ------------------------------------ |
+| TODO   | construct llama fine-tuning pipeline |
+| TODO   | prepare MMLU evaluation pipeline     |
 
 
 ## Known Issues
@@ -24,3 +20,8 @@
 + the gradient issue around PQ
 + efficient csr-based kernel / pseudo
 + improve: pre-compute indptr, multi-dim indices
+
+
+## Scripts
++ python3 script/2-model-info.py --ckpt=.data/sheared-llama-2.7b.ckpt --tuning=lora
++ python3 script/9-profile.py --name='facebook/opt-1.3b' --tuning='lora' --module='mha' --backward

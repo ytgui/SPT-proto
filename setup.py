@@ -34,7 +34,6 @@ setup(
                 'extension/softmax.cu',
                 'extension/cdist.cu',
                 'extension/lookup.cu',
-                'extension/csr2csc.cpp',
                 'extension/sddmm.cpp',
                 'extension/spmm.cpp'
             ]

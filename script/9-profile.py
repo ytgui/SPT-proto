@@ -1,7 +1,7 @@
 import time
 import torch
 import argparse
-from torch import nn, profiler
+from torch import nn, optim, profiler
 from naive_gpt import layers, utils
 
 
@@ -151,6 +151,9 @@ def profile(name: str,
         raise RuntimeError
     device = loader().device
     model = model.to(device)
+    optimizer = optim.AdamW(
+        model.parameters(), lr=1e-4, weight_decay=1e-2
+    )
 
     # compile
     if compile:
@@ -164,6 +167,8 @@ def profile(name: str,
         if not backward:
             continue
         torch.sum(y_1).backward()
+        optimizer.step()
+        model.zero_grad()
 
     # simple
     time.sleep(2.0)
@@ -173,6 +178,8 @@ def profile(name: str,
     y_1 = model(x)
     if backward:
         torch.sum(y_1).backward()
+    optimizer.step()
+    model.zero_grad()
     torch.cuda.synchronize()
     print('simple timing: {:.2f}ms'.format(
         1000.0 * (time.time() - before)
@@ -195,6 +202,8 @@ def profile(name: str,
             if not backward:
                 continue
             torch.sum(y_1).backward()
+            optimizer.step()
+            model.zero_grad()
     print(
         prof.key_averages().table(
             sort_by='cuda_time_total', row_limit=5

@@ -13,11 +13,15 @@ def load_model(name: str,
 
     #
     if name.find('opt') != -1:
-        if name == 'facebook/opt-1.3b':
+        if name == 'opt-1024':
+            n_heads = 16
+            d_model = 1024
+            d_feedforward = 4096
+        elif name == 'opt-2048':
             n_heads = 32
             d_model = 2048
             d_feedforward = 8192
-        elif name == 'facebook/opt-2.7b':
+        elif name == 'opt-2560':
             n_heads = 32
             d_model = 2560
             d_feedforward = 10240
@@ -54,15 +58,37 @@ def load_model(name: str,
                 )
             )
             return loader, model.to(cuda_device)
+        elif module == 'both':
+            model = layers.TransformerBlock(
+                d_model=d_model, n_heads=n_heads,
+                layernorm_fn=nn.LayerNorm(d_model),
+                attention_fn=layers.VanillaAttention(
+                    d_head=d_model // n_heads,
+                    p_dropout=0.0
+                ),
+                feedforward_fn=layers.Feedforward(
+                    d_model=d_model,
+                    d_feedforward=d_feedforward,
+                    activation=nn.ReLU(),
+                    p_dropout=0.0
+                ),
+                attention_bias=True,
+                pre_norm=True
+            )
+            return loader, model.to(cuda_device)
         else:
             raise NotImplementedError
 
     elif name.find('llama') != -1:
-        if name == 'openlm-research/open_llama_7b':
+        if name == 'llama-2560':
+            n_heads = 20
+            d_model = 2560
+            d_feedforward = 6912
+        if name == 'llama-4096':
             n_heads = 32
             d_model = 4096
             d_feedforward = 11008
-        elif name == 'openlm-research/open_llama_13b':
+        elif name == 'llama-5120':
             n_heads = 32
             d_model = 5120
             d_feedforward = 13824
@@ -217,7 +243,7 @@ def profile(name: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--name', default='facebook/opt-1.3b',
+        '--name', default='opt-1024',
         help='specify model name or path'
     )
     parser.add_argument(
@@ -225,8 +251,8 @@ def main():
         help='specify full, lora, or sparse'
     )
     parser.add_argument(
-        '--module', default='mha',
-        help='specify module in mha or ffn'
+        '--module', default='both',
+        help='specify module in mha, ffn, or both'
     )
     parser.add_argument(
         '--backward', action='store_true',

@@ -5,7 +5,7 @@ from naive_gpt import layers
 
 
 def test_lora_linear():
-    d_model = random.randint(1, 16)
+    d_lora = random.randint(1, 16)
     in_features = random.randint(1, 256)
     out_features = random.randint(1, 256)
     batch_size = random.randint(1, 64)
@@ -19,7 +19,7 @@ def test_lora_linear():
         out_features=out_features
     )
     model_2 = layers.LoRALinear.from_pretrained(
-        d_model, p_dropout=0.0, source=model_1
+        d_lora=d_lora, source=model_1
     )
 
     # lora zero output
@@ -43,7 +43,7 @@ def test_lora_linear():
 
 
 def test_lora_embedding():
-    d_model = random.randint(1, 16)
+    d_lora = random.randint(1, 16)
     num_embeddings = random.randint(1, 1024)
     embedding_dim = random.randint(1, 256)
     batch_size = random.randint(1, 64)
@@ -58,13 +58,12 @@ def test_lora_embedding():
         embedding_dim=embedding_dim
     )
     model_2 = layers.LoRAEmbedding(
-        d_model=d_model,
+        d_lora=d_lora,
         num_embeddings=num_embeddings,
-        embedding_dim=embedding_dim,
-        lora_dropout=0.0
+        embedding_dim=embedding_dim
     )
     model_2 = layers.LoRAEmbedding.from_pretrained(
-        d_model, p_dropout=0.0, source=model_1
+        d_lora=d_lora, source=model_1
     )
 
     # lora zero output

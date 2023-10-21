@@ -75,7 +75,6 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
                   q: torch.Tensor,
                   k: torch.Tensor,
                   attn_mask: torch.Tensor):
-        assert attn_mask is None
         assert q.size() == k.size()
         seq_length = q.size(1)
 
@@ -105,6 +104,9 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
         # attention
         attn_values = kernels.sddmm(
             fixed_indptr, csr_indices, query=q, key=k
+        )
+        attn_values = torch.clamp_(
+            attn_values, min=-10.0, max=10.0
         )
         attn_values = kernels.softmax(
             fixed_indptr, csr_indices, values=attn_values

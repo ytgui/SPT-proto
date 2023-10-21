@@ -84,7 +84,7 @@ def load_model(name: str,
             n_heads = 20
             d_model = 2560
             d_feedforward = 6912
-        if name == 'llama-4096':
+        elif name == 'llama-4096':
             n_heads = 32
             d_model = 4096
             d_feedforward = 11008
@@ -122,6 +122,23 @@ def load_model(name: str,
                     d_feedforward=d_feedforward,
                     activation=nn.SiLU()
                 )
+            )
+            return loader, model.to(cuda_device)
+        elif module == 'both':
+            model = layers.TransformerBlock(
+                d_model=d_model, n_heads=n_heads,
+                layernorm_fn=layers.LlamaRMSNorm(d_model),
+                attention_fn=layers.RotaryAttention(
+                    d_head=d_model // n_heads,
+                    p_dropout=0.0
+                ),
+                feedforward_fn=layers.LLaMaFeedforward(
+                    d_model=d_model,
+                    d_feedforward=d_feedforward,
+                    activation=nn.SiLU()
+                ),
+                attention_bias=False,
+                pre_norm=True
             )
             return loader, model.to(cuda_device)
         else:

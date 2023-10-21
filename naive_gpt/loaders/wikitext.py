@@ -24,7 +24,7 @@ class WikitextDataModule(L.LightningDataModule):
         if tokenizer == 'opt':
             tokenizer = 'facebook/opt-1.3b'
         elif tokenizer == 'llama':
-            tokenizer = 'openlm-research/open_llama_7b'
+            tokenizer = 'princeton-nlp/Sheared-LLaMA-2.7B'
         self.tokenizer = AT.from_pretrained(tokenizer)
         self.pad_value = self.tokenizer.pad_token_id
 

@@ -153,8 +153,8 @@ class SparseLoRAHandler(LoRAHandler):
             return
         assert isinstance(child, layers.Feedforward)
         new_model = layers.LoRARoutedFFN.from_pretrained(
-            d_lora=self.lora_r, block_size=child.d_feedforward // 8,
-            p_dropout=self.lora_dropout, source=child
+            d_lora=self.d_lora, block_size=child.d_feedforward // 8,
+            source=child
         )
         return new_model
 
@@ -166,8 +166,8 @@ class SparseLoRAHandler(LoRAHandler):
             return
         assert isinstance(child, layers.LLaMaFeedforward)
         new_model = layers.LoRARoutedLLaMaFFN.from_pretrained(
-            d_lora=self.lora_r, block_size=child.d_feedforward // 8,
-            p_dropout=self.lora_dropout, source=child
+            d_lora=self.d_lora, block_size=child.d_feedforward // 8,
+            source=child
         )
         return new_model
 

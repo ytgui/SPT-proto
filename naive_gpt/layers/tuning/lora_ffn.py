@@ -9,7 +9,6 @@ class LoRARoutedFFN(layers.RoutedFFN):
                  block_size: int,
                  d_model: int,
                  d_feedforward: int,
-                 lora_dropout: float,
                  activation: nn.Module):
         layers.RoutedFFN.__init__(
             self,
@@ -21,18 +20,17 @@ class LoRARoutedFFN(layers.RoutedFFN):
         )
         # LoRA
         self.fc1 = layers.LoRALinear(
-            d_model=d_lora, in_features=d_model,
-            out_features=d_feedforward, lora_dropout=lora_dropout
+            d_lora=d_lora, in_features=d_model,
+            out_features=d_feedforward
         )
         self.fc2 = layers.LoRALinear(
-            d_model=d_lora, in_features=d_feedforward,
-            out_features=d_model, lora_dropout=lora_dropout
+            d_lora=d_lora, in_features=d_feedforward,
+            out_features=d_model
         )
 
     @staticmethod
     def from_pretrained(d_lora: int,
                         block_size: int,
-                        p_dropout: float,
                         source: layers.Feedforward):
         assert isinstance(
             source, layers.Feedforward
@@ -42,8 +40,7 @@ class LoRARoutedFFN(layers.RoutedFFN):
             block_size=block_size,
             d_model=source.d_model,
             d_feedforward=source.d_feedforward,
-            activation=source.activation,
-            lora_dropout=p_dropout
+            activation=source.activation
         )
         output = model.load_state_dict(
             source.state_dict(), strict=False
@@ -54,17 +51,13 @@ class LoRARoutedFFN(layers.RoutedFFN):
 
     def forward(self, x: torch.Tensor):
         # lora
-        weight_1 = self.fc1.lora.dropout(
-            torch.matmul(
-                self.fc1.lora.right.weight,
-                self.fc1.lora.left.weight.T
-            )
+        weight_1 = torch.matmul(
+            self.fc1.lora.right.weight,
+            self.fc1.lora.left.weight.T
         ) + self.fc1.weight
-        weight_2 = self.fc2.lora.dropout(
-            torch.matmul(
-                self.fc2.lora.right.weight,
-                self.fc2.lora.left.weight.T
-            )
+        weight_2 = torch.matmul(
+            self.fc2.lora.right.weight,
+            self.fc2.lora.left.weight.T
         ) + self.fc2.weight
 
         #
@@ -92,7 +85,6 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
                  block_size: int,
                  d_model: int,
                  d_feedforward: int,
-                 lora_dropout: float,
                  activation: nn.Module):
         layers.RoutedLLaMaFFN.__init__(
             self, d_model, d_feedforward,
@@ -100,22 +92,21 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
         )
         # LoRA
         self.gate = layers.LoRALinear(
-            d_model=d_lora, in_features=d_model, bias=False,
-            out_features=d_feedforward, lora_dropout=lora_dropout
+            d_lora=d_lora, in_features=d_model,
+            out_features=d_feedforward, bias=False
         )
         self.side = layers.LoRALinear(
-            d_model=d_lora, in_features=d_model, bias=False,
-            out_features=d_feedforward, lora_dropout=lora_dropout
+            d_lora=d_lora, in_features=d_model,
+            out_features=d_feedforward, bias=False
         )
         self.down = layers.LoRALinear(
-            d_model=d_lora, in_features=d_feedforward, bias=False,
-            out_features=d_model, lora_dropout=lora_dropout
+            d_lora=d_lora, in_features=d_feedforward,
+            out_features=d_model, bias=False
         )
 
     @staticmethod
     def from_pretrained(d_lora: int,
                         block_size: int,
-                        p_dropout: float,
                         source: layers.LLaMaFeedforward):
         assert isinstance(
             source, layers.LLaMaFeedforward
@@ -125,8 +116,7 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
             block_size=block_size,
             d_model=source.d_model,
             d_feedforward=source.d_feedforward,
-            activation=source.activation,
-            lora_dropout=p_dropout
+            activation=source.activation
         )
         output = model.load_state_dict(
             source.state_dict(), strict=False
@@ -137,23 +127,17 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
 
     def forward(self, x: torch.Tensor):
         # lora
-        weight_gate = self.gate.lora.dropout(
-            torch.matmul(
-                self.gate.lora.right.weight,
-                self.gate.lora.left.weight.T
-            )
+        weight_gate = torch.matmul(
+            self.gate.lora.right.weight,
+            self.gate.lora.left.weight.T
         ) + self.gate.weight
-        weight_side = self.side.lora.dropout(
-            torch.matmul(
-                self.side.lora.right.weight,
-                self.side.lora.left.weight.T
-            )
+        weight_side = torch.matmul(
+            self.side.lora.right.weight,
+            self.side.lora.left.weight.T
         ) + self.side.weight
-        weight_down = self.down.lora.dropout(
-            torch.matmul(
-                self.down.lora.right.weight,
-                self.down.lora.left.weight.T
-            )
+        weight_down = torch.matmul(
+            self.down.lora.right.weight,
+            self.down.lora.left.weight.T
         ) + self.down.weight
 
         #

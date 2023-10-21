@@ -5,10 +5,8 @@ from naive_gpt import layers
 
 class LoRAHandler:
     def __init__(self,
-                 lora_r: int,
-                 lora_dropout: float):
-        self.lora_r = lora_r
-        self.lora_dropout = lora_dropout
+                 d_lora: int):
+        self.d_lora = d_lora
 
     def default(self,
                 name: str,
@@ -23,9 +21,7 @@ class LoRAHandler:
         )
         Module = layers.LoRALinear
         new_model = Module.from_pretrained(
-            d_model=self.lora_r,
-            p_dropout=self.lora_dropout,
-            source=child
+            d_lora=self.d_lora, source=child
         )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)
@@ -39,9 +35,7 @@ class LoRAHandler:
         )
         Module = layers.LoRAEmbedding
         new_model = Module.from_pretrained(
-            d_model=self.lora_r,
-            p_dropout=self.lora_dropout,
-            source=child
+            d_lora=self.d_lora, source=child
         )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)
@@ -50,12 +44,10 @@ class LoRAHandler:
 
 class SparseLoRAHandler(LoRAHandler):
     def __init__(self,
-                 lora_r: int,
-                 lora_dropout: float,
+                 d_lora: int,
                  stage: int):
         LoRAHandler.__init__(
-            self, lora_r=lora_r,
-            lora_dropout=lora_dropout
+            self, d_lora=d_lora
         )
         #
         assert stage in [1, 2]
@@ -122,7 +114,9 @@ class SparseLoRAHandler(LoRAHandler):
     def onSparseVanillaAttentionV1(self,
                                    name: str,
                                    child: layers.SparseVanillaAttentionV1):
-        assert self.stage == 2
+        if self.stage != 2:
+            print('[SKIP]', name, type(child).__name__)
+            return
         assert isinstance(
             child, layers.SparseVanillaAttentionV1
         )
@@ -137,7 +131,9 @@ class SparseLoRAHandler(LoRAHandler):
     def onSparseRotaryAttentionV1(self,
                                   name: str,
                                   child: layers.SparseRotaryAttentionV1):
-        assert self.stage == 2
+        if self.stage != 2:
+            print('[SKIP]', name, type(child).__name__)
+            return
         assert isinstance(
             child, layers.SparseRotaryAttentionV1
         )
@@ -157,7 +153,7 @@ class SparseLoRAHandler(LoRAHandler):
             return
         assert isinstance(child, layers.Feedforward)
         new_model = layers.LoRARoutedFFN.from_pretrained(
-            d_lora=self.lora_r, block_size=child.d_model // 2,
+            d_lora=self.lora_r, block_size=child.d_feedforward // 8,
             p_dropout=self.lora_dropout, source=child
         )
         return new_model

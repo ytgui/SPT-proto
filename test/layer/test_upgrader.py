@@ -108,9 +108,7 @@ def test_upgrade_opt():
     )
     upgrader = utils.ModuleUpgrader(
         handler=utils.SparseLoRAHandler(
-            lora_r=d_lora,
-            lora_dropout=0.0,
-            stage=1
+            d_lora=d_lora, stage=1
         )
     )
     model_0 = upgrader.visit(model_0)
@@ -120,7 +118,7 @@ def test_upgrade_opt():
 
     # model 2
     model_2 = layers.LoRARoutedFFN.from_pretrained(
-        d_lora, block_size=block_size, p_dropout=0.0, source=model_0
+        d_lora, block_size=block_size, source=model_0
     )
     model_2.router.load_state_dict(model_1.router.state_dict())
 
@@ -161,9 +159,7 @@ def test_upgrade_llama():
     )
     upgrader = utils.ModuleUpgrader(
         handler=utils.SparseLoRAHandler(
-            lora_r=d_lora,
-            lora_dropout=0.0,
-            stage=1
+            d_lora=d_lora, stage=1
         )
     )
     model_0 = upgrader.visit(model_0)
@@ -173,7 +169,7 @@ def test_upgrade_llama():
 
     # model 2
     model_2 = layers.LoRARoutedLLaMaFFN.from_pretrained(
-        d_lora, block_size=block_size, p_dropout=0.0, source=model_0
+        d_lora, block_size=block_size, source=model_0
     )
     model_2.router.load_state_dict(model_1.router.state_dict())
 

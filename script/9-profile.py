@@ -175,8 +175,7 @@ def profile(name: str,
     elif tuning == 'lora':
         upgrader = utils.ModuleUpgrader(
             handler=utils.LoRAHandler(
-                lora_r=d_lora,
-                lora_dropout=0.0
+                d_lora=d_lora
             )
         )
         model = upgrader.visit(model)
@@ -184,9 +183,7 @@ def profile(name: str,
         for stage in [1, 2]:
             upgrader = utils.ModuleUpgrader(
                 handler=utils.SparseLoRAHandler(
-                    lora_r=d_lora,
-                    lora_dropout=0.0,
-                    stage=stage
+                    d_lora=d_lora, stage=stage
                 )
             )
             model = upgrader.visit(model)

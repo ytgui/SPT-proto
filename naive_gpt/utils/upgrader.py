@@ -156,6 +156,8 @@ class SparseLoRAHandler(LoRAHandler):
             d_lora=self.d_lora, block_size=child.d_feedforward // 8,
             source=child
         )
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
         return new_model
 
     def onLLaMaFeedforward(self,
@@ -169,6 +171,8 @@ class SparseLoRAHandler(LoRAHandler):
             d_lora=self.d_lora, block_size=child.d_feedforward // 8,
             source=child
         )
+        print('[UPGRADE]', name, type(child).__name__,
+              '->', type(new_model).__name__)
         return new_model
 
 

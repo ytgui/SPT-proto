@@ -2,49 +2,51 @@ import os
 import torch
 import argparse
 import lightning as L
+from deepspeed import ops
 from torch import nn, optim
 from torch.optim import lr_scheduler as lr
 from lightning.pytorch import callbacks, strategies
 from naive_gpt import loaders, models, utils
 from torchmetrics import Perplexity
-from torchmetrics import Accuracy
 
 
 class LightningModel(L.LightningModule):
-    PAD_VALUE = 0x01
-
     def __init__(self,
                  d_lora: int,
-                 p_dropout: int,
                  ckpt_path: str):
         super().__init__()
         # optim
         self.lr = 1e-4
-        self.weight_decay = 1e-2
+        self.weight_decay = 1e-1
         # checkpoint
         ckpt = torch.load(
             f=ckpt_path
         )
         config = ckpt['config']
-        model = models.OPTModel(**config)
-        model.load_state_dict(ckpt['state_dict'])
+        if 'opt' in ckpt_path:
+            self.model = models.OPTModel(**config)
+        elif 'llama' in ckpt_path:
+            self.model = models.LLaMAModel(**config)
+        else:
+            raise RuntimeError
+        self.model.load_state_dict(ckpt['state_dict'])
         # insert LoRA
-        upgrader = utils.ModuleUpgrader(
-            handler=utils.LoRAHandler(
-                lora_r=d_lora,
-                lora_dropout=p_dropout
+        if d_lora > 0:
+            upgrader = utils.ModuleUpgrader(
+                handler=utils.LoRAHandler(
+                    d_lora=d_lora
+                )
             )
-        )
-        self.model = upgrader.visit(model)
+            self.model = upgrader.visit(self.model)
         # loss and metrics
         self.loss_fn = nn.CrossEntropyLoss()
         self.ppl_fn = Perplexity(
-            ignore_index=self.PAD_VALUE
+            # ignore_index=PAD_VALUE
         )
-        self.accuracy_fn = Accuracy(task='binary')
 
     def configure_optimizers(self):
-        optimizer = optim.SGD(
+        # optimizer = optim.AdamW(
+        optimizer = ops.adam.DeepSpeedCPUAdam(
             self.parameters(), lr=self.lr,
             weight_decay=self.weight_decay
         )
@@ -88,19 +90,6 @@ class LightningModel(L.LightningModule):
             ),
             prog_bar=True, sync_dist=True
         )
-        # accuracy
-        target = batch[:, -1]
-        predict = torch.argmax(
-            output[:, -1, :], dim=-1
-        )
-        is_equal = torch.eq(predict, target)
-        self.accuracy_fn.to(batch.device)
-        self.log(
-            'accuracy', self.accuracy_fn(
-                is_equal, target=torch.ones_like(is_equal)
-            ),
-            prog_bar=True, sync_dist=True
-        )
 
 
 def main():
@@ -108,7 +97,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--ckpt', help='specify model path',
-        default='.data/opt-125m.ckpt'
+        default='.data/opt-1.3b.ckpt'
     )
     parser.add_argument(
         '--seq_length', help='pad sequence to fixed length',
@@ -116,7 +105,7 @@ def main():
     )
     parser.add_argument(
         '--batch_size', help='specify batch size',
-        default=8
+        default=2
     )
     parser.add_argument(
         '--n_devices', help='number of gpus to use',
@@ -125,10 +114,6 @@ def main():
     parser.add_argument(
         '--d_lora', help='dim oflow rank adaptation',
         default=16
-    )
-    parser.add_argument(
-        '--p_dropout', help='dropout probability of lora',
-        default=0.1
     )
     args = parser.parse_args()
 
@@ -142,37 +127,30 @@ def main():
     dm = loaders.WikitextDataModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
-        seq_length=args.seq_length + 1,
         batch_size=args.batch_size,
+        seq_length=args.seq_length + 1,
         num_workers=1, tokenizer=tokenizer
-    )
-    mmlu_dm = loaders.MMLUDataModule(
-        root=os.getenv('HOME') +
-        '/Public/Datasets/text/',
-        n_shots=1, max_length=args.seq_length + 1,
-        batch_size=1, num_workers=1
     )
 
     # lightning
     model = LightningModel(
         d_lora=args.d_lora,
-        p_dropout=args.p_dropout,
         ckpt_path=args.ckpt
     )
     summary = callbacks.ModelSummary(3)
     trainer = L.Trainer(
-        strategy=strategies.FSDPStrategy(
-            use_orig_params=True, cpu_offload=True
+        strategy=strategies.DeepSpeedStrategy(
+            stage=3, offload_optimizer=True,
+            offload_parameters=True, cpu_checkpointing=True
         ),
         precision='32-true', accelerator='cuda', devices=args.n_devices,
-        max_epochs=20, limit_train_batches=1024, limit_val_batches=64,
-        callbacks=[summary]
+        max_epochs=20, limit_train_batches=256, limit_val_batches=16,
+        accumulate_grad_batches=4, callbacks=[summary]
     )
 
     # fine-tuning
     trainer.fit(model, dm)
-    # trainer.validate(model, dataloaders=dm)
-    # trainer.validate(model, dataloaders=mmlu_dm)
+    trainer.validate(model, dm)
 
 
 if __name__ == '__main__':

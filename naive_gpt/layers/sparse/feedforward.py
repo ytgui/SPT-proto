@@ -9,7 +9,7 @@ class RoutedFFN(layers.Feedforward):
                  d_feedforward: int,
                  block_size: int,
                  activation: nn.Module,
-                 p_dropout: float):
+                 p_dropout: float = 0.0):
         layers.Feedforward.__init__(
             self, d_model, d_feedforward,
             p_dropout=p_dropout, activation=activation

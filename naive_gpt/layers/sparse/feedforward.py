@@ -56,7 +56,7 @@ class RoutedFFN(layers.Feedforward):
         )
         prob = self.router(x)
         topk = torch.topk(
-            prob, k=self.n_blocks // 4,
+            prob, k=self.n_blocks // 2,
             dim=-1, sorted=False
         )
         indices = topk.indices

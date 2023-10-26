@@ -49,7 +49,11 @@ class LoRARoutedFFN(layers.RoutedFFN):
             raise RuntimeError
         return model
 
-    def forward(self, x: torch.Tensor):
+    def _apply_ffn(self,
+                   x: torch.Tensor,
+                   bias_1: torch.Tensor,
+                   weight_1: torch.Tensor,
+                   weight_2: torch.Tensor):
         # route
         x_size = x.size()
         x = x.view(
@@ -57,19 +61,61 @@ class LoRARoutedFFN(layers.RoutedFFN):
         )
         prob = self.router(x)
         topk = torch.topk(
-            prob, k=self.n_blocks // 2,
+            prob, k=self.n_blocks // 4,
             dim=-1, sorted=False
         )
         indices = topk.indices
 
-        # blocking
+        # mask
+        masks = []
+        for i in range(self.n_blocks):
+            cmp = torch.eq(indices, i)
+            masks.append(
+                torch.sum(
+                    cmp, dim=-1, dtype=torch.bool
+                )
+            )
+
+        # fc1
+        h = torch.matmul(
+            torch.matmul(
+                x, self.fc1.lora.left.weight
+            ),
+            self.fc1.lora.right.weight.T
+        )
+        h = h.view(
+            [-1, self.n_blocks, self.block_size]
+        )
+        for i in range(self.n_blocks):
+            x_i = x[masks[i]]
+            b_i, w_i = bias_1[i], weight_1[i]
+            h[masks[i], i] += torch.addmm(
+                b_i, x_i, w_i.T, beta=1.0, alpha=1.0
+            )
+        h = self.activation(h)
+
+        # fc2
+        y = torch.matmul(
+            torch.matmul(
+                h.view([h.size(0), -1]),
+            self.fc2.lora.left.weight
+            ),
+            self.fc2.lora.right.weight.T
+        )
+        for i in range(self.n_blocks):
+            y[masks[i]] += torch.matmul(
+                h[masks[i], i], weight_2[i]
+            )
+        y += self.fc2.bias.view([1, -1])
+
+        #
+        return y.view(x_size)
+
+    def forward(self, x: torch.Tensor):
         bias_1 = self.fc1.bias.view(
             [self.n_blocks, self.block_size]
         )
         weight_1 = self.fc1.weight.view(
-            [self.n_blocks, self.block_size, -1]
-        )
-        lora_right_1 = self.fc1.lora.right.weight.view(
             [self.n_blocks, self.block_size, -1]
         )
         weight_2 = self.fc2.weight.view(
@@ -77,50 +123,11 @@ class LoRARoutedFFN(layers.RoutedFFN):
         )
         weight_2 = torch.permute(
             weight_2, dims=[1, 2, 0]
-        ).contiguous()
-        lora_left_2 = self.fc2.lora.left.weight.view(
-            [self.n_blocks, self.block_size, -1]
         )
-
-        #
-        loss = 0.0
-        y = torch.zeros_like(x)
-        for i in range(self.n_blocks):
-            cmp = torch.eq(indices, i)
-            mask = torch.sum(
-                cmp, dim=-1, dtype=torch.bool
-            )
-            # fc1
-            x_i = x[mask]
-            b_i, w_i = bias_1[i], weight_1[i]
-            h = torch.addmm(
-                b_i, x_i, w_i.T, beta=1.0, alpha=1.0
-            )
-            h += torch.matmul(
-                torch.matmul(
-                    x_i, self.fc1.lora.left.weight
-                ),
-                lora_right_1[i].T
-            )
-            h = self.activation(h)
-            # fc2
-            w_i = weight_2[i]
-            y[mask] += torch.matmul(
-                torch.matmul(h, lora_left_2[i]),
-                self.fc2.lora.right.weight.T
-            ) + torch.matmul(h, w_i)
-            # balancing
-            frac = torch.mean(
-                mask.type(torch.float)
-            )
-            loss += torch.nan_to_num(
-                frac * torch.mean(prob[mask, i]), nan=0.0
-            )
-        self.register_buffer('loss', loss, persistent=False)
-        y += self.fc2.bias.view([1, -1])
-
-        #
-        return y.view(x_size)
+        return self._apply_ffn(
+            x, bias_1=bias_1, weight_1=weight_1,
+            weight_2=weight_2.contiguous()
+        )
 
 
 class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):

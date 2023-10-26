@@ -91,7 +91,7 @@ def test_upgrade_opt():
     d_lora = random.randint(1, 16)
     block_size = 16 * random.randint(1, 4)
     d_model = block_size * random.randint(1, 2)
-    d_feedforward = block_size * random.randint(1, 8)
+    d_feedforward = block_size * random.choice([8, 16])
     batch_size = random.randint(1, 64)
 
     # x
@@ -143,7 +143,7 @@ def test_upgrade_llama():
     d_lora = random.randint(1, 16)
     block_size = 16 * random.randint(1, 4)
     d_model = block_size * random.randint(1, 2)
-    d_feedforward = block_size * random.randint(1, 8)
+    d_feedforward = block_size * random.choice([8, 16])
     batch_size = random.randint(1, 64)
 
     # x

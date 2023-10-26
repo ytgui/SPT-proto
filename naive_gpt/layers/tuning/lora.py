@@ -19,6 +19,7 @@ class LoRABase(nn.Module):
             out_features, embedding_dim=d_lora,
             device=device, dtype=dtype
         )
+        # scaling not used
         self.scaling = 1.0 / d_lora
         self.reset_parameters()
 
@@ -69,7 +70,7 @@ class LoRALinear(nn.Linear):
         y = nn.functional.linear(
             x, bias=self.bias, weight=self.weight
         )
-        y += self.lora.scaling * torch.matmul(
+        y += torch.matmul(
             torch.matmul(
                 x, self.lora.left.weight
             ),

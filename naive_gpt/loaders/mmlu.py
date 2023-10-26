@@ -11,7 +11,7 @@ class MMLUDataModule(L.LightningDataModule):
     def __init__(self,
                  root: str,
                  n_shots: int,
-                 max_length: int,
+                 seq_length: int,
                  batch_size: int,
                  num_workers: int,
                  tokenizer='opt'):
@@ -19,7 +19,7 @@ class MMLUDataModule(L.LightningDataModule):
         #
         self.root = root
         self.n_shots = n_shots
-        self.max_length = max_length
+        self.seq_length = seq_length
         self.batch_size = batch_size
         self.num_workers = num_workers
         #
@@ -37,7 +37,7 @@ class MMLUDataModule(L.LightningDataModule):
                 self.tokenizer.encode
             ),
             loaders.TruncPadding(
-                seq_length=self.max_length,
+                seq_length=self.seq_length,
                 pad_value=self.pad_value
             ),
             transforms.ToTensor()

@@ -1,6 +1,7 @@
 # basic
 from .transform import Sanitize
 from .transform import ClampPadding
+from .transform import TruncPadding
 
 # reader
 from .reader import LineReader, TextFolder

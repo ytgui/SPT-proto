@@ -4,6 +4,7 @@ import lightning as L
 from torch.utils import data
 from torchtext import transforms
 from naive_gpt import loaders, layers
+from .details.mmlu import MMLUDataset
 
 
 class MMLUDataModule(L.LightningDataModule):
@@ -12,7 +13,8 @@ class MMLUDataModule(L.LightningDataModule):
                  n_shots: int,
                  max_length: int,
                  batch_size: int,
-                 num_workers: int):
+                 num_workers: int,
+                 tokenizer='opt'):
         super().__init__()
         #
         self.root = root
@@ -22,23 +24,26 @@ class MMLUDataModule(L.LightningDataModule):
         self.num_workers = num_workers
         #
         AT = transformers.AutoTokenizer
-        self.tokenizer = AT.from_pretrained(
-            'facebook/opt-125m'
-        )
+        if tokenizer == 'opt':
+            tokenizer = 'facebook/opt-1.3b'
+        elif tokenizer == 'llama':
+            tokenizer = 'princeton-nlp/Sheared-LLaMA-2.7B'
+        self.tokenizer = AT.from_pretrained(tokenizer)
+        self.pad_value = self.tokenizer.pad_token_id
 
     def _dataloader(self, mode: str):
         transform = transforms.Sequential(
             layers.FnModule(
                 self.tokenizer.encode
             ),
-            datasets.Truncate(
+            loaders.TruncPadding(
                 seq_length=self.max_length,
-                output_mode='tail'
+                pad_value=self.pad_value
             ),
             transforms.ToTensor()
         )
         return data.DataLoader(
-            datasets.MMLUDataset(
+            MMLUDataset(
                 self.root, mode=mode,
                 n_shots=self.n_shots,
                 text_transform=transform
@@ -50,3 +55,7 @@ class MMLUDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return self._dataloader(mode='valid')
+
+    def train_dataloader(self):
+        return self._dataloader(mode='train')
+

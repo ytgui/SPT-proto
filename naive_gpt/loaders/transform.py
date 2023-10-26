@@ -37,34 +37,6 @@ class Sanitize(nn.Module):
         return '\n\n'.join(clean_text)
 
 
-class Truncate(nn.Module):
-    def __init__(self,
-                 seq_length: int,
-                 output_mode: str):
-        nn.Module.__init__(self)
-        #
-        self.seq_length = seq_length
-        self.output_mode = output_mode
-
-    def forward(self, sequence: list):
-        assert isinstance(
-            sequence, (list, tuple)
-        )
-        #
-        if self.output_mode == 'head':
-            sequence = sequence[
-                :self.seq_length
-            ]
-        elif self.output_mode == 'tail':
-            sequence = sequence[
-                -self.seq_length:
-            ]
-        else:
-            raise RuntimeError
-        #
-        return sequence
-
-
 class ClampPadding(nn.Module):
     def __init__(self,
                  seq_length: int,
@@ -92,3 +64,29 @@ class ClampPadding(nn.Module):
             right = left + self.seq_length
             sequence = sequence[left:right]
         return sequence
+
+
+class TruncPadding(nn.Module):
+    def __init__(self,
+                 seq_length: int,
+                 pad_value: int = 0):
+        nn.Module.__init__(self)
+        #
+        self.pad_value = pad_value
+        self.seq_length = seq_length
+
+    def forward(self, sequence: list):
+        assert isinstance(
+            sequence, (list, tuple)
+        )
+        #
+        n_sequence = len(sequence)
+        if n_sequence < self.seq_length:
+            sequence.extend([
+                self.pad_value for _ in
+                range(self.seq_length - n_sequence)
+            ])
+        elif n_sequence > self.seq_length:
+            sequence = sequence[-self.seq_length:]
+            n_sequence = len(sequence)
+        return [n_sequence] + sequence

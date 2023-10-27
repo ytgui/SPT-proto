@@ -82,7 +82,9 @@ class SparseLoRAHandler(LoRAHandler):
     def onVanillaAttention(self,
                            name: str,
                            child: layers.VanillaAttention):
-        assert self.stage == 1
+        if self.stage != 1:
+            print('[SKIP]', name, type(child).__name__)
+            return
         assert isinstance(
             child, layers.VanillaAttention
         )
@@ -98,7 +100,9 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
-        assert self.stage == 1
+        if self.stage != 1:
+            print('[SKIP]', name, type(child).__name__)
+            return
         assert isinstance(
             child, layers.RotaryAttention
         )
@@ -153,7 +157,7 @@ class SparseLoRAHandler(LoRAHandler):
             return
         assert isinstance(child, layers.Feedforward)
         new_model = layers.LoRARoutedFFN.from_pretrained(
-            d_lora=self.d_lora, block_size=child.d_feedforward // 8,
+            d_lora=self.d_lora, block_size=child.d_feedforward // 4,
             source=child
         )
         print('[UPGRADE]', name, type(child).__name__,
@@ -168,7 +172,7 @@ class SparseLoRAHandler(LoRAHandler):
             return
         assert isinstance(child, layers.LLaMaFeedforward)
         new_model = layers.LoRARoutedLLaMaFFN.from_pretrained(
-            d_lora=self.d_lora, block_size=child.d_feedforward // 8,
+            d_lora=self.d_lora, block_size=child.d_feedforward // 4,
             source=child
         )
         print('[UPGRADE]', name, type(child).__name__,

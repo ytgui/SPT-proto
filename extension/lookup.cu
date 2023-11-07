@@ -130,19 +130,19 @@ torch::Tensor lookup_forward_cuda(
         );
     } else if (n_subspaces == 10 && nonzeros == 32) {
         dim3 threads(WORKER_SIZE, BLOCK_SIZE);
-        lookup_forward_kernel<16, 32><<<blocks, threads>>>(
+        lookup_forward_kernel<10, 32><<<blocks, threads>>>(
             batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
             key.data_ptr<index_t>(), output.data_ptr<index_t>()
         );
     } else if (n_subspaces == 10 && nonzeros == 64) {
         dim3 threads(WORKER_SIZE, BLOCK_SIZE);
-        lookup_forward_kernel<16, 64><<<blocks, threads>>>(
+        lookup_forward_kernel<10, 64><<<blocks, threads>>>(
             batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
             key.data_ptr<index_t>(), output.data_ptr<index_t>()
         );
     } else if (n_subspaces == 10 && nonzeros == 128) {
         dim3 threads(WORKER_SIZE, BLOCK_SIZE);
-        lookup_forward_kernel<16, 128><<<blocks, threads>>>(
+        lookup_forward_kernel<10, 128><<<blocks, threads>>>(
             batch_size, seq_length, nonzeros, query.data_ptr<index_t>(),
             key.data_ptr<index_t>(), output.data_ptr<index_t>()
         );

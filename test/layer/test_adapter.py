@@ -108,7 +108,7 @@ def test_upgrade_opt():
     )
     upgrader = utils.ModuleUpgrader(
         handler=utils.SparseLoRAHandler(
-            d_lora=d_lora, stage=1
+            d_lora=d_lora, stage='lora'
         )
     )
     model_0 = upgrader.visit(model_0)
@@ -159,7 +159,7 @@ def test_upgrade_llama():
     )
     upgrader = utils.ModuleUpgrader(
         handler=utils.SparseLoRAHandler(
-            d_lora=d_lora, stage=1
+            d_lora=d_lora, stage='lora'
         )
     )
     model_0 = upgrader.visit(model_0)

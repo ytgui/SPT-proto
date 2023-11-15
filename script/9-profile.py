@@ -180,7 +180,7 @@ def profile(name: str,
         )
         model = upgrader.visit(model)
     elif tuning == 'sparse':
-        for stage in [1, 2]:
+        for stage in ['lora', 'ffn', 'mha_v1', 'mha_v2']:
             upgrader = utils.ModuleUpgrader(
                 handler=utils.SparseLoRAHandler(
                     d_lora=d_lora, stage=stage
@@ -257,11 +257,11 @@ def profile(name: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--name', default='opt-1024',
+        '--name', default='opt-2048',
         help='specify model name or path'
     )
     parser.add_argument(
-        '--tuning', default='lora',
+        '--tuning', default='sparse',
         help='specify full, lora, or sparse'
     )
     parser.add_argument(

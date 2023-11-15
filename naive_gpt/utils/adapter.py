@@ -45,12 +45,15 @@ class LoRAHandler:
 class SparseLoRAHandler(LoRAHandler):
     def __init__(self,
                  d_lora: int,
-                 stage: int):
+                 stage: str):
         LoRAHandler.__init__(
             self, d_lora=d_lora
         )
         #
-        assert stage in [1, 2]
+        assert stage in [
+            'lora', 'ffn',
+            'mha_v1', 'mha_v2'
+        ]
         self.stage = stage
 
     def onLinear(self,
@@ -59,7 +62,7 @@ class SparseLoRAHandler(LoRAHandler):
         assert isinstance(
             child, nn.Linear
         )
-        if self.stage != 1:
+        if self.stage != 'lora':
             print('[SKIP]', name, type(child).__name__)
             return
         return LoRAHandler.onLinear(
@@ -72,7 +75,7 @@ class SparseLoRAHandler(LoRAHandler):
         assert isinstance(
             child, nn.Embedding
         )
-        if self.stage != 1:
+        if self.stage != 'lora':
             print('[SKIP]', name, type(child).__name__)
             return
         return LoRAHandler.onEmbedding(
@@ -82,7 +85,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onVanillaAttention(self,
                            name: str,
                            child: layers.VanillaAttention):
-        if self.stage != 1:
+        if self.stage != 'mha_v1':
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(
@@ -100,7 +103,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
-        if self.stage != 1:
+        if self.stage != 'mha_v1':
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(
@@ -118,7 +121,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onSparseVanillaAttentionV1(self,
                                    name: str,
                                    child: layers.SparseVanillaAttentionV1):
-        if self.stage != 2:
+        if self.stage != 'mha_v2':
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(
@@ -135,7 +138,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onSparseRotaryAttentionV1(self,
                                   name: str,
                                   child: layers.SparseRotaryAttentionV1):
-        if self.stage != 2:
+        if self.stage != 'mha_v2':
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(
@@ -152,7 +155,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onFeedforward(self,
                       name: str,
                       child: layers.Feedforward):
-        if self.stage != 2:
+        if self.stage != 'ffn':
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(child, layers.Feedforward)
@@ -167,7 +170,7 @@ class SparseLoRAHandler(LoRAHandler):
     def onLLaMaFeedforward(self,
                            name: str,
                            child: layers.LLaMaFeedforward):
-        if self.stage != 2:
+        if self.stage != 'ffn':
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(child, layers.LLaMaFeedforward)

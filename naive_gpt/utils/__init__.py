@@ -1,4 +1,4 @@
-# upgrader
-from .upgrader import LoRAHandler
-from .upgrader import ModuleUpgrader
-from .upgrader import SparseLoRAHandler
+# adapter
+from .adapter import LoRAHandler
+from .adapter import ModuleUpgrader
+from .adapter import SparseLoRAHandler

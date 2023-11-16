@@ -52,9 +52,12 @@ class PQBase(nn.Module):
             indices = z_flat
         else:
             if self.method == 'v1':
+                dtype = z_flat.dtype
+                # cdist only has float32
                 distance = torch.cdist(
-                    z_flat, self.weight, p=1.0
-                )
+                    z_flat.type(torch.float),
+                    self.weight.type(torch.float), p=1.0
+                ).type(dtype)
                 indices = torch.argmin(
                     distance, dim=-1, keepdim=True
                 )

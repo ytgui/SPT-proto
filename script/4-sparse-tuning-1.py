@@ -2,7 +2,6 @@ import os
 import torch
 import argparse
 import lightning as L
-from deepspeed import ops
 from torch import nn, optim
 from torch.optim import lr_scheduler as lr
 from lightning.pytorch import callbacks, strategies
@@ -31,7 +30,7 @@ class LightningModel(L.LightningModule):
             raise RuntimeError
         self.model.load_state_dict(ckpt['state_dict'])
         # model adapter
-        for stage in ['lora', 'ffn']:
+        for stage in ['lora', 'ffn', 'mha_v1']:
             upgrader = utils.ModuleUpgrader(
                 handler=utils.SparseLoRAHandler(
                     d_lora=d_lora, stage=stage
@@ -45,7 +44,7 @@ class LightningModel(L.LightningModule):
         )
 
     def configure_optimizers(self):
-        optimizer = ops.adam.DeepSpeedCPUAdam(
+        optimizer = optim.AdamW(
             self.parameters(), lr=self.lr,
             weight_decay=self.weight_decay
         )
@@ -92,7 +91,8 @@ class LightningModel(L.LightningModule):
         self.ppl_fn.to(batch.device)
         self.log(
             'ppl', self.ppl_fn(
-                output, target=batch[:, 2:]
+                output.type(torch.float),
+                target=batch[:, 2:]
             ),
             prog_bar=True, sync_dist=True
         )
@@ -117,7 +117,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--ckpt', help='specify model path',
-        default='.data/opt-1.3b.ckpt'
+        default='.data/opt-2.7b.ckpt'
     )
     parser.add_argument(
         '--seq_length', help='pad sequence to fixed length',
@@ -125,6 +125,10 @@ def main():
     )
     parser.add_argument(
         '--batch_size', help='specify batch size',
+        default=1
+    )
+    parser.add_argument(
+        '--n_accumulate', help='specify accumulate size',
         default=1
     )
     parser.add_argument(
@@ -159,14 +163,19 @@ def main():
         ckpt_path=args.ckpt
     )
     summary = callbacks.ModelSummary(3)
+    checker = callbacks.ModelCheckpoint(
+        save_last=True, save_top_k=3,
+        monitor='ppl', mode='min',
+        filename='LM-{epoch}-{ppl:.1e}-{accuracy:.1f}'
+    )
     trainer = L.Trainer(
         strategy=strategies.DeepSpeedStrategy(
-            stage=3, offload_optimizer=True,
+            stage=3, offload_optimizer=False,
             offload_parameters=True, cpu_checkpointing=True
         ),
-        precision='32-true', accelerator='cuda', devices=args.n_devices,
-        max_epochs=20, limit_train_batches=256, limit_val_batches=64,
-        accumulate_grad_batches=1, gradient_clip_val=1.0, callbacks=[summary]
+        precision='16-mixed', accelerator='cuda', devices=args.n_devices,
+        max_epochs=20, limit_train_batches=args.n_accumulate * 1024, limit_val_batches=64,
+        accumulate_grad_batches=args.n_accumulate, gradient_clip_val=1.0, callbacks=[summary, checker]
     )
 
     # fine-tuning

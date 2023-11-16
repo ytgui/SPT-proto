@@ -106,7 +106,7 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
             fixed_indptr, csr_indices, query=q, key=k
         )
         attn_values = torch.clamp_(
-            attn_values, min=-10.0, max=10.0
+            self.scaling * attn_values, min=-10.0, max=10.0
         )
         attn_values = kernels.softmax(
             fixed_indptr, csr_indices, values=attn_values

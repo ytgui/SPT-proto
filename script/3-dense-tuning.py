@@ -80,14 +80,28 @@ class LightningModel(L.LightningModule):
                         batch_idx: int):
         assert batch.dim() == 2
         output = self.shared_step(
-            batch[:, :-1], target=batch[:, 1:]
+            batch[:, 1:-1], target=batch[:, 2:]
         )[0]
         # ppl
         self.ppl_fn.to(batch.device)
         self.log(
             'ppl', self.ppl_fn(
-                output, target=batch[:, 1:]
+                output, target=batch[:, 2:]
             ),
+            prog_bar=True, sync_dist=True
+        )
+        # mmlu
+        position = batch[:, 0]
+        target = target = batch[:, position]
+        position_m2 = torch.subtract(position, 2)
+        predict = torch.argmax(
+            output[:, position_m2, :], dim=-1
+        )
+        accuracy = torch.mean(
+            torch.eq(predict, target).type(torch.float)
+        )
+        self.log(
+            'accuracy', accuracy,
             prog_bar=True, sync_dist=True
         )
 
@@ -105,11 +119,11 @@ def main():
     )
     parser.add_argument(
         '--batch_size', help='specify batch size',
-        default=2
+        default=1
     )
     parser.add_argument(
         '--n_devices', help='number of gpus to use',
-        default=2
+        default=4
     )
     parser.add_argument(
         '--d_lora', help='dim oflow rank adaptation',
@@ -124,12 +138,12 @@ def main():
         tokenizer = 'llama'
     else:
         raise NotImplementedError
-    dm = loaders.WikitextDataModule(
+    dm = loaders.MMLUDataModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
-        batch_size=args.batch_size,
-        seq_length=args.seq_length + 1,
-        num_workers=1, tokenizer=tokenizer
+        n_shots=5, batch_size=args.batch_size,
+        num_workers=1, tokenizer=tokenizer,
+        seq_length=args.seq_length + 1
     )
 
     # lightning
@@ -144,8 +158,8 @@ def main():
             offload_parameters=True, cpu_checkpointing=True
         ),
         precision='32-true', accelerator='cuda', devices=args.n_devices,
-        max_epochs=20, limit_train_batches=256, limit_val_batches=16,
-        accumulate_grad_batches=4, callbacks=[summary]
+        max_epochs=20, limit_train_batches=256, limit_val_batches=64,
+        accumulate_grad_batches=1, gradient_clip_val=1.0, callbacks=[summary]
     )
 
     # fine-tuning

@@ -1,4 +1,6 @@
 import os
+import torch
+import random
 from torch.utils import data
 from torchdata import datapipes as dp
 from naive_gpt import loaders
@@ -97,6 +99,13 @@ class LineReader(data.IterableDataset):
         return True
 
     def __iter__(self):
+        seed = int.from_bytes(
+            os.urandom(4),
+            byteorder='little'
+        )
+        random.seed(seed)
+        torch.random.manual_seed(seed)
+        #
         for item in self._source_dp:
             filename, content = item
             # append

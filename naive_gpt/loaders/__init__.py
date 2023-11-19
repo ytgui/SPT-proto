@@ -9,8 +9,8 @@ from .reader import LineReader, TextFolder
 # MMLU
 from .mmlu import MMLUDataModule
 
-# Alpaca
-from .alpaca import AlpacaDataModule
+# Flan-Mini
+from .flanmini import FlanMiniDataModule
 
 # Wikitext
 from .wikitext import WikitextDataModule

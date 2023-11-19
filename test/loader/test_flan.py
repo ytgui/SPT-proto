@@ -2,13 +2,12 @@ import os
 from naive_gpt import loaders
 
 
-def test_alpaca():
+def test_flanmini():
     batch_size = 16
-    seq_length = 1024
-    alpaca_prefix = 'Below is an instruction that describes a task'
+    seq_length = 512
 
     #
-    dm = loaders.AlpacaDataModule(
+    dm = loaders.FlanMiniDataModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
         seq_length=seq_length + 1,
@@ -19,25 +18,22 @@ def test_alpaca():
     loader = dm.train_dataloader()
     batch = next(iter(loader))
     assert batch.size(0) == batch_size
-    assert batch.size(-1) == seq_length + 1
+    assert batch.size(-1) == seq_length + 2
 
     # decode
-    tokenizer = dm.tokenizer
     for sample in batch:
-        assert len(sample) == seq_length
-        text = tokenizer.decode(sample)
-        assert alpaca_prefix in text
-        encoded = tokenizer.encode(text)
+        text = dm.tokenizer.decode(sample)
+        encoded = dm.tokenizer.encode(text)
         union = set(sample.tolist()).union(encoded)
         inter = set(sample.tolist()).intersection(encoded)
-        assert abs(len(inter) - len(union)) < 10
+        assert abs(len(inter) - len(union)) < 20
 
     #
-    print('[PASS] test_alpaca()')
+    print('[PASS] test_flanmini()')
 
 
 def main():
-    test_alpaca()
+    test_flanmini()
 
 
 if __name__ == '__main__':

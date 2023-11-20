@@ -170,35 +170,72 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
         return model
 
     def forward(self, x: torch.Tensor):
-        # lora
-        weight_gate = torch.matmul(
-            self.gate.lora.right.weight,
-            self.gate.lora.left.weight.T
-        ) + self.gate.weight
-        weight_side = torch.matmul(
-            self.side.lora.right.weight,
-            self.side.lora.left.weight.T
-        ) + self.side.weight
-        weight_down = torch.matmul(
-            self.down.lora.right.weight,
-            self.down.lora.left.weight.T
-        ) + self.down.weight
+        # routing
+        x_size = x.size()
+        x = x.view(
+            [-1, self.d_model]
+        )
+        prob = self.router(x)
+        topk = torch.topk(
+            prob, k=self.n_blocks // 4,
+            dim=-1, sorted=False
+        )
+        indices = topk.indices
 
-        #
-        weight_gate = weight_gate.view(
+        # blocking
+        weight_gate = self.gate.weight.view(
             [self.n_blocks, self.block_size, -1]
         )
-        weight_side = weight_side.view(
+        lora_gate_r = self.gate.lora.right.weight.view(
             [self.n_blocks, self.block_size, -1]
         )
-        weight_down = weight_down.view(
-            [-1, self.n_blocks, self.block_size]
+        weight_side = self.side.weight.view(
+            [self.n_blocks, self.block_size, -1]
+        )
+        lora_side_r = self.side.lora.right.weight.view(
+            [self.n_blocks, self.block_size, -1]
         )
         weight_down = torch.permute(
-            weight_down, dims=[1, 2, 0]
+            self.down.weight.view(
+                [-1, self.n_blocks, self.block_size]
+            ), dims=[1, 2, 0]
         )
-        return self._apply_ffn(
-            x, weight_gate=weight_gate,
-            weight_side=weight_side,
-            weight_down=weight_down.contiguous()
+        lora_down_l = self.down.lora.left.weight.view(
+            [self.n_blocks, self.block_size, -1]
         )
+
+        # applying
+        loss = 0.0
+        y = torch.zeros_like(x)
+        for i in range(self.n_blocks):
+            cmp = torch.eq(indices, i)
+            mask = torch.sum(
+                cmp, dim=-1, dtype=torch.bool
+            )
+            # fc1
+            x_i = x[mask]
+            gate_i = weight_gate[i]
+            side_i = weight_side[i]
+            h_gate = torch.matmul(x_i, gate_i.T) + torch.matmul(
+                torch.matmul(x_i, self.gate.lora.left.weight), lora_gate_r[i].T
+            )
+            h_side = torch.matmul(x_i, side_i.T) + torch.matmul(
+                torch.matmul(x_i, self.side.lora.left.weight), lora_side_r[i].T
+            )
+            h = self.activation(h_gate) * h_side
+            # fc2
+            down_i = weight_down[i]
+            y[mask] += torch.matmul(h, down_i) + torch.matmul(
+                torch.matmul(h, lora_down_l[i]), self.down.lora.right.weight.T
+            )
+            # balancing
+            frac = torch.mean(
+                mask.type(torch.float)
+            )
+            loss += torch.nan_to_num(
+                frac * torch.mean(prob[mask, i]), nan=0.0
+            )
+        self.register_buffer('loss', loss, persistent=False)
+
+        #
+        return y.view(x_size)

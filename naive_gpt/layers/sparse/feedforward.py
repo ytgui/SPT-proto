@@ -21,7 +21,7 @@ class RoutedFFN(layers.Feedforward):
         #
         self.router = nn.Sequential(
             nn.Linear(d_model, self.n_blocks),
-            nn.Softmax(dim=-1)
+            nn.Sigmoid()
         )
 
     @staticmethod
@@ -119,7 +119,7 @@ class RoutedLLaMaFFN(layers.LLaMaFeedforward):
         #
         self.router = nn.Sequential(
             nn.Linear(d_model, self.n_blocks),
-            nn.Softmax(dim=-1)
+            nn.Sigmoid()
         )
 
     @staticmethod

@@ -83,17 +83,17 @@ class LoRARoutedFFN(layers.RoutedFFN):
         )
 
         #
-        loss = 0.0
         y = torch.zeros_like(x)
         for i in range(self.n_blocks):
             cmp = torch.eq(indices, i)
             mask = torch.sum(
                 cmp, dim=-1, dtype=torch.bool
             )
+            coeff = 2.0 * prob[mask, i].unsqueeze(-1)
             # fc1
             x_i = x[mask]
             b_i, w_i = bias_1[i], weight_1[i]
-            h = torch.addmm(
+            h = coeff * torch.addmm(
                 b_i, x_i, w_i.T, beta=1.0, alpha=1.0
             )
             h += torch.matmul(
@@ -108,15 +108,7 @@ class LoRARoutedFFN(layers.RoutedFFN):
             y[mask] += torch.matmul(
                 torch.matmul(h, lora_left_2[i]),
                 self.fc2.lora.right.weight.T
-            ) + torch.matmul(h, w_i)
-            # balancing
-            frac = torch.mean(
-                mask.type(torch.float)
-            )
-            loss += torch.nan_to_num(
-                frac * torch.mean(prob[mask, i]), nan=0.0
-            )
-        self.register_buffer('loss', loss, persistent=False)
+            ) + coeff * torch.matmul(h, w_i)
         y += self.fc2.bias.view([1, -1])
 
         #
@@ -177,7 +169,7 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
         )
         prob = self.router(x)
         topk = torch.topk(
-            prob, k=self.n_blocks // 4,
+            prob, k=self.n_blocks // 2,
             dim=-1, sorted=False
         )
         indices = topk.indices
@@ -205,37 +197,29 @@ class LoRARoutedLLaMaFFN(layers.RoutedLLaMaFFN):
         )
 
         # applying
-        loss = 0.0
         y = torch.zeros_like(x)
         for i in range(self.n_blocks):
             cmp = torch.eq(indices, i)
             mask = torch.sum(
                 cmp, dim=-1, dtype=torch.bool
             )
+            coeff = 2.0 * prob[mask, i].unsqueeze(-1)
             # fc1
             x_i = x[mask]
             gate_i = weight_gate[i]
             side_i = weight_side[i]
-            h_gate = torch.matmul(x_i, gate_i.T) + torch.matmul(
+            h_gate = coeff * torch.matmul(x_i, gate_i.T) + torch.matmul(
                 torch.matmul(x_i, self.gate.lora.left.weight), lora_gate_r[i].T
             )
-            h_side = torch.matmul(x_i, side_i.T) + torch.matmul(
+            h_side = coeff * torch.matmul(x_i, side_i.T) + torch.matmul(
                 torch.matmul(x_i, self.side.lora.left.weight), lora_side_r[i].T
             )
             h = self.activation(h_gate) * h_side
             # fc2
             down_i = weight_down[i]
-            y[mask] += torch.matmul(h, down_i) + torch.matmul(
+            y[mask] += coeff * torch.matmul(h, down_i) + torch.matmul(
                 torch.matmul(h, lora_down_l[i]), self.down.lora.right.weight.T
             )
-            # balancing
-            frac = torch.mean(
-                mask.type(torch.float)
-            )
-            loss += torch.nan_to_num(
-                frac * torch.mean(prob[mask, i]), nan=0.0
-            )
-        self.register_buffer('loss', loss, persistent=False)
 
         #
         return y.view(x_size)

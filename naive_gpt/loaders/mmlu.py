@@ -50,11 +50,11 @@ class MMLUDataModule(L.LightningDataModule):
                     self.root, mode=mode,
                     n_shots=self.n_shots,
                     text_transform=transform
-                ): 0.25,
+                ): 0.1,
                 FlanMiniDataset(
                     self.root, mode=mode,
                     text_transform=transform
-                ): 2.50
+                ): 1.0
             })
         else:
             dataset = MMLUDataset(

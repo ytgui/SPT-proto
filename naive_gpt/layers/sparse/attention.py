@@ -23,6 +23,11 @@ class SparseVanillaAttentionV1(layers.VanillaAttention):
             n_codewords=n_codewords,
             n_subspaces=n_subspaces
         )
+        #
+        self.trigger: torch.Tensor
+        self.register_buffer(
+            'trigger', torch.scalar_tensor(False, dtype=torch.bool)
+        )
 
     def _get_attn(self,
                   q: torch.Tensor,
@@ -53,6 +58,11 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
             d_codeword=d_codeword,
             n_codewords=n_codewords,
             n_subspaces=d_head // d_codeword
+        )
+        #
+        self.trigger: torch.Tensor
+        self.register_buffer(
+            'trigger', torch.scalar_tensor(False, dtype=torch.bool)
         )
 
     @staticmethod
@@ -85,6 +95,13 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
         k = k.view([-1, k.size(-2), k.size(-1)])
 
         # quantizer
+        if self.trigger.is_nonzero():
+            self.trigger.logical_not_()
+            loss_q = self.quantizer('train', z=q)[-1]
+            loss_k = self.quantizer('train', z=k)[-1]
+            self.register_buffer(
+                'loss', loss_q + loss_k, persistent=False
+            )
         q_c = self.quantizer('encode', z=q)
         k_c = self.quantizer('encode', z=k)
 
@@ -146,6 +163,11 @@ class SparseRotaryAttentionV1(layers.RotaryAttention):
             n_codewords=n_codewords,
             n_subspaces=d_head // d_codeword
         )
+        #
+        self.trigger: torch.Tensor
+        self.register_buffer(
+            'trigger', torch.scalar_tensor(False, dtype=torch.bool)
+        )
 
     def _get_attn(self,
                   q: torch.Tensor,
@@ -185,6 +207,11 @@ class SparseRotaryAttentionV2(layers.RotaryAttention):
             d_codeword=d_codeword,
             n_codewords=n_codewords,
             n_subspaces=d_head // d_codeword
+        )
+        #
+        self.trigger: torch.Tensor
+        self.register_buffer(
+            'trigger', torch.scalar_tensor(False, dtype=torch.bool)
         )
 
     @staticmethod
@@ -226,6 +253,13 @@ class SparseRotaryAttentionV2(layers.RotaryAttention):
         k = k.view([-1, k.size(-2), k.size(-1)])
 
         # quantizer
+        if self.trigger.is_nonzero():
+            self.trigger.logical_not_()
+            loss_q = self.quantizer('train', z=q)[-1]
+            loss_k = self.quantizer('train', z=k)[-1]
+            self.register_buffer(
+                'loss', loss_q + loss_k, persistent=False
+            )
         q_c = self.quantizer('encode', z=q)
         k_c = self.quantizer('encode', z=k)
 
@@ -245,6 +279,9 @@ class SparseRotaryAttentionV2(layers.RotaryAttention):
         # attention
         attn_values = kernels.sddmm(
             fixed_indptr, csr_indices, query=q, key=k
+        )
+        attn_values = torch.clamp_(
+            self.scaling * attn_values, min=-10.0, max=10.0
         )
         attn_values = kernels.softmax(
             fixed_indptr, csr_indices, values=attn_values

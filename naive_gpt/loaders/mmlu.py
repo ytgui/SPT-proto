@@ -74,3 +74,6 @@ class MMLUDataModule(L.LightningDataModule):
 
     def train_dataloader(self):
         return self._dataloader(mode='train')
+
+    def test_dataloader(self):
+        return self._dataloader(mode='test')

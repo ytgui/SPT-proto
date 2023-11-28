@@ -4,7 +4,7 @@ import argparse
 import lightning as L
 from torch import nn, optim
 from torch.optim import lr_scheduler as lr
-from lightning.pytorch import callbacks, strategies
+from lightning.pytorch import callbacks
 from naive_gpt import loaders, models, utils
 from torchmetrics import Perplexity
 
@@ -61,22 +61,34 @@ class LightningModel(L.LightningModule):
             output.flatten(end_dim=-2),
             target=target.flatten()
         )
-        #
-        loss_aux = 0.0
-        for name, buffer in self.named_buffers():
-            if not name.endswith('.loss'):
-                continue
-            loss_aux += buffer
-        #
-        return output, loss + 1e-2 * loss_aux
+        return output, loss
 
     def training_step(self,
                       batch: torch.Tensor,
                       batch_idx: int):
         assert batch.dim() == 2
+        #
+        if batch_idx % 1 == 0:
+            true_tensor = torch.scalar_tensor(
+                True, dtype=torch.bool
+            )
+            for name, trigger in self.named_buffers():
+                if not name.endswith('.trigger'):
+                    continue
+                trigger.fill_(true_tensor)
+        #
         loss = self.shared_step(
             batch[:, 1:-1], target=batch[:, 2:]
         )[-1]
+        #
+        loss_aux = 0.0
+        if batch_idx % 1 == 0:
+            for name, buffer in self.named_buffers():
+                if not name.endswith('.loss'):
+                    continue
+                loss_aux += buffer
+        #
+        loss += 1e-2 * loss_aux
         self.log('loss', loss, prog_bar=True)
         return loss
 
@@ -117,7 +129,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--ckpt', help='specify model path',
-        default='.data/sheared-llama-2.7b.ckpt'
+        default='.data/opt-125m.ckpt'
     )
     parser.add_argument(
         '--seq_length', help='pad sequence to fixed length',
@@ -125,15 +137,15 @@ def main():
     )
     parser.add_argument(
         '--batch_size', help='specify batch size',
-        default=1
+        default=4
     )
     parser.add_argument(
         '--n_accumulate', help='specify accumulate size',
-        default=4
+        default=1
     )
     parser.add_argument(
         '--n_devices', help='number of gpus to use',
-        default=4
+        default=1
     )
     parser.add_argument(
         '--d_lora', help='dim oflow rank adaptation',
@@ -152,7 +164,7 @@ def main():
     dm = loaders.MMLUDataModule(
         root=os.getenv('HOME') +
         '/Public/Datasets/text/',
-        n_shots=1, batch_size=args.batch_size,
+        n_shots=5, batch_size=args.batch_size,
         num_workers=1, tokenizer=tokenizer,
         seq_length=args.seq_length + 1
     )
@@ -166,14 +178,10 @@ def main():
     checker = callbacks.ModelCheckpoint(
         save_last=True, save_top_k=3,
         monitor='ppl', mode='min',
-        filename='LM-{epoch}-{ppl:.1e}-{accuracy:.1f}'
+        filename='LM-{epoch}-{ppl:.1f}-{accuracy:.3f}'
     )
     trainer = L.Trainer(
-        strategy=strategies.DeepSpeedStrategy(
-            stage=3, offload_optimizer=False,
-            offload_parameters=True, cpu_checkpointing=True
-        ),
-        precision='16-mixed', accelerator='cuda', devices=args.n_devices,
+        precision='32-true', accelerator='cuda', devices=args.n_devices,
         max_epochs=20, limit_train_batches=args.n_accumulate * 256, limit_val_batches=args.n_accumulate * 64,
         accumulate_grad_batches=args.n_accumulate, gradient_clip_val=1.0, callbacks=[summary, checker]
     )

@@ -234,7 +234,6 @@ class SparseRotaryAttentionV2(layers.RotaryAttention):
                   q: torch.Tensor,
                   k: torch.Tensor,
                   attn_mask: torch.Tensor):
-        assert attn_mask is None
         assert q.size() == k.size()
         seq_length = q.size(1)
 

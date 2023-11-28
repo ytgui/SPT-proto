@@ -243,7 +243,7 @@ std::vector<torch::Tensor> cdist_forward_cuda(
     } else {
         TORCH_CHECK(false && "d_code not supported");
     }
-    TORCH_CHECK(cudaGetLastError() == cudaSuccess);
+    CUDA_CHECH(cudaGetLastError());
 
     //
     return {distance, indices};
@@ -313,7 +313,7 @@ std::vector<torch::Tensor> cdist_backward_cuda(
         } else {
             TORCH_CHECK(false && "d_code not supported");
         }
-        TORCH_CHECK(cudaGetLastError() == cudaSuccess);
+        CUDA_CHECH(cudaGetLastError());
     }();
 
     // dispatch table
@@ -325,7 +325,7 @@ std::vector<torch::Tensor> cdist_backward_cuda(
             table.data_ptr<float>(), grad_output.data_ptr<float>(),
             grad_table.data_ptr<float>()
         );
-        TORCH_CHECK(cudaGetLastError() == cudaSuccess);
+        CUDA_CHECH(cudaGetLastError());
     }();
 
     //

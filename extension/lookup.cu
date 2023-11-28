@@ -167,7 +167,7 @@ torch::Tensor lookup_forward_cuda(
     } else {
         TORCH_CHECK(false && "n_subspaces not supported");
     }
-    TORCH_CHECK(cudaGetLastError() == cudaSuccess);
+    CUDA_CHECH(cudaGetLastError());
 
     //
     return output;

@@ -22,10 +22,10 @@ __global__ void softmax_forward_kernel(
         index_vt index = __ldg(
             (const index_vt *)&indices[gz * nonzeros + i]
         );
-        cumulated += expf(cache.x) * (index.x <= gy);
-        cumulated += expf(cache.y) * (index.y <= gy);
-        cumulated += expf(cache.z) * (index.z <= gy);
-        cumulated += expf(cache.w) * (index.w <= gy);
+        cumulated += expf(cache.x);
+        cumulated += expf(cache.y);
+        cumulated += expf(cache.z);
+        cumulated += expf(cache.w);
     }
     cumulated = fmax(1e-9, cumulated);
 
@@ -38,10 +38,10 @@ __global__ void softmax_forward_kernel(
         index_vt index = __ldg(
             (const index_vt *)&indices[gz * nonzeros + i]
         );
-        cache.x = scale * expf(cache.x) * (index.x <= gy);
-        cache.y = scale * expf(cache.y) * (index.y <= gy);
-        cache.z = scale * expf(cache.z) * (index.z <= gy);
-        cache.w = scale * expf(cache.w) * (index.w <= gy);
+        cache.x = scale * expf(cache.x);
+        cache.y = scale * expf(cache.y);
+        cache.z = scale * expf(cache.z);
+        cache.w = scale * expf(cache.w);
         __stcs((vector_t *)&output[gz * nonzeros + i], cache);
     }
 }
@@ -61,10 +61,10 @@ __global__ void softmax_backward_kernel(
     for (index_t i = indptr[gy]; i < indptr[gy + 1]; i += TSZ) {
         vector_t cache_output = __ldg((const vector_t *)&output[gz * nonzeros + i]);
         vector_t cache_grad_output = __ldg((const vector_t *)&grad_output[gz * nonzeros + i]);
-        cumulated += cache_output.x * cache_grad_output.x * (indices[gz * nonzeros + i + 0] <= gy);
-        cumulated += cache_output.y * cache_grad_output.y * (indices[gz * nonzeros + i + 1] <= gy);
-        cumulated += cache_output.z * cache_grad_output.z * (indices[gz * nonzeros + i + 2] <= gy);
-        cumulated += cache_output.w * cache_grad_output.w * (indices[gz * nonzeros + i + 3] <= gy);
+        cumulated += cache_output.x * cache_grad_output.x;
+        cumulated += cache_output.y * cache_grad_output.y;
+        cumulated += cache_output.z * cache_grad_output.z;
+        cumulated += cache_output.w * cache_grad_output.w;
     }
     cumulated = fmax(1e-9, cumulated);
 
@@ -72,10 +72,10 @@ __global__ void softmax_backward_kernel(
     for (index_t i = indptr[gy]; i < indptr[gy + 1]; i += TSZ) {
         vector_t cache_output = __ldg((const vector_t *)&output[gz * nonzeros + i]);
         vector_t cache_grad_output = __ldg((const vector_t *)&grad_output[gz * nonzeros + i]);
-        cache_output.x = cache_output.x * (cache_grad_output.x - cumulated) * (indices[gz * nonzeros + i + 0] <= gy);
-        cache_output.y = cache_output.y * (cache_grad_output.y - cumulated) * (indices[gz * nonzeros + i + 1] <= gy);
-        cache_output.z = cache_output.z * (cache_grad_output.z - cumulated) * (indices[gz * nonzeros + i + 2] <= gy);
-        cache_output.w = cache_output.w * (cache_grad_output.w - cumulated) * (indices[gz * nonzeros + i + 3] <= gy);
+        cache_output.x = cache_output.x * (cache_grad_output.x - cumulated);
+        cache_output.y = cache_output.y * (cache_grad_output.y - cumulated);
+        cache_output.z = cache_output.z * (cache_grad_output.z - cumulated);
+        cache_output.w = cache_output.w * (cache_grad_output.w - cumulated);
         __stcs((vector_t *)&grad_values[gz * nonzeros + i], cache_output);
     }
 }

@@ -7,3 +7,4 @@ Transformer-based large language models (e.g., BERT and GPT) achieve great succe
 
 ## Current Status
 + Preprint on arxiv is available: https://arxiv.org/abs/2312.10365
++ A detailed guide of installation and reproduction can be found in the appendix section

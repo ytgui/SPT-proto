@@ -5,7 +5,7 @@ from torch import profiler
 from naive_gpt import kernels
 
 
-def get_input(masked: bool, batch_size: int, seq_length: int):
+def get_input(batch_size: int, seq_length: int):
     cuda_device = 'cuda'
 
     # mask
@@ -13,14 +13,13 @@ def get_input(masked: bool, batch_size: int, seq_length: int):
         [batch_size, seq_length, seq_length],
         device=cuda_device
     )
-    if masked is True:
-        mask = torch.tril(
-            torch.ones(
-                [batch_size, seq_length, seq_length],
-                dtype=torch.bool, device=cuda_device
-            )
+    mask = torch.tril(
+        torch.ones(
+            [batch_size, seq_length, seq_length],
+            dtype=torch.bool, device=cuda_device
         )
-        prob = torch.where(mask, prob, 0.0)
+    )
+    prob = torch.where(mask, prob, 0.0)
     topk = torch.topk(
         prob, k=seq_length // 8, dim=-1,
         largest=True, sorted=False
@@ -51,10 +50,9 @@ def get_input(masked: bool, batch_size: int, seq_length: int):
     dense = torch.where(
         dense > 0.0, dense, float('-inf')
     )
-    if masked is True:
-        dense = torch.where(
-            mask, dense, float('-inf')
-        )
+    dense = torch.where(
+        mask, dense, float('-inf')
+    )
     dense.requires_grad = True
 
     #
@@ -62,41 +60,36 @@ def get_input(masked: bool, batch_size: int, seq_length: int):
 
 
 def test_softmax():
-    for masked in [True, False]:
-        print('masked:', masked)
+    dense, sparse_csr = get_input(
+        batch_size=random.randint(1, 16),
+        seq_length=64 * random.randint(1, 16)
+    )
+    indptr, indices, values = sparse_csr
 
-        #
-        dense, sparse_csr = get_input(
-            masked=masked,
-            batch_size=random.randint(1, 16),
-            seq_length=64 * random.randint(1, 16)
-        )
-        indptr, indices, values = sparse_csr
+    # torch
+    y_1 = torch.softmax(dense, dim=-1)
+    torch.max(y_1).backward()
+    grad_1 = dense.grad.detach().clone()
 
-        # torch
-        y_1 = torch.softmax(dense, dim=-1)
-        torch.max(y_1).backward()
-        grad_1 = dense.grad.detach().clone()
+    # kernel
+    y_2 = kernels.softmax(
+        indptr, indices, values
+    )
+    torch.max(y_2).backward()
+    grad_2 = values.grad.detach().clone()
 
-        # kernel
-        y_2 = kernels.softmax(
-            indptr, indices, values, masked=masked
-        )
-        torch.max(y_2).backward()
-        grad_2 = values.grad.detach().clone()
-
-        # check
-        indptr = torch.expand_copy(
-            indptr.view(1, -1), size=[indices.size(0), -1]
-        )
-        y_2 = torch.sparse_csr_tensor(
-            indptr, col_indices=indices, values=y_2, size=y_1.size()
-        )
-        grad_2 = torch.sparse_csr_tensor(
-            indptr, col_indices=indices, values=grad_2, size=grad_1.size()
-        )
-        assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
-        assert torch.allclose(grad_1, grad_2.to_dense(), atol=1e-3)
+    # check
+    indptr = torch.expand_copy(
+        indptr.view(1, -1), size=[indices.size(0), -1]
+    )
+    y_2 = torch.sparse_csr_tensor(
+        indptr, col_indices=indices, values=y_2, size=y_1.size()
+    )
+    grad_2 = torch.sparse_csr_tensor(
+        indptr, col_indices=indices, values=grad_2, size=grad_1.size()
+    )
+    assert torch.allclose(y_1, y_2.to_dense(), atol=1e-3)
+    assert torch.allclose(grad_1, grad_2.to_dense(), atol=1e-3)
 
     #
     print('[PASS] test_softmax()')
@@ -104,7 +97,7 @@ def test_softmax():
 
 def bench_softmax():
     dense, sparse_csr = get_input(
-        True, batch_size=64, seq_length=1024
+        batch_size=64, seq_length=1024
     )
     indptr, indices, values = sparse_csr
 
@@ -131,7 +124,7 @@ def bench_softmax():
     ) as prof:
         for _ in range(20):
             y_2 = kernels.softmax(
-                indptr, indices, values, masked=True
+                indptr, indices, values
             )
             torch.sum(y_2).backward()
     print(

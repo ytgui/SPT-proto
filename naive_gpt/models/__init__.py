@@ -1,3 +1,6 @@
+# BERT Model
+from .bert import BertModel
+
 # OPT Model
 from .opt import OPTModel
 

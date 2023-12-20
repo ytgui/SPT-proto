@@ -5,6 +5,78 @@ import transformers as T
 from naive_gpt import models
 
 
+class BertModel(models.BertModel):
+    def load_pretrained(self, state_dict: dict):
+        # embeddings
+        self.embedding.load_state_dict({
+            'weight': state_dict.pop(
+                'embeddings.word_embeddings.weight'
+            )
+        })
+        self.token_type.load_state_dict({
+            'weight': state_dict.pop(
+                'embeddings.token_type_embeddings.weight'
+            )
+        })
+        self.learned_pe.load_state_dict({
+            'weight': state_dict.pop(
+                'embeddings.position_embeddings.weight'
+            )
+        })
+        self.init_norm.load_state_dict({
+            'bias': state_dict.pop(
+                'embeddings.LayerNorm.bias'
+            ),
+            'weight': state_dict.pop(
+                'embeddings.LayerNorm.weight'
+            )
+        })
+
+        # encoder layers
+        for i, v in enumerate(self.encoders):
+            prefix = 'encoder.layer.{}.'.format(i)
+
+            # dump states
+            layer_state = {}
+            removed_keys = []
+            for k in state_dict:
+                k: str
+                if not k.startswith(prefix):
+                    continue
+                new_k = k.removeprefix(prefix)
+                layer_state[new_k] = state_dict[k]
+                removed_keys.append(k)
+            for k in removed_keys:
+                state_dict.pop(k)
+
+            # load states
+            v.load_state_dict({
+                # ffd
+                'ffd.fc1.bias': layer_state.pop('intermediate.dense.bias'),
+                'ffd.fc1.weight': layer_state.pop('intermediate.dense.weight'),
+                'ffd.fc2.bias': layer_state.pop('output.dense.bias'),
+                'ffd.fc2.weight': layer_state.pop('output.dense.weight'),
+                # mha
+                'mha.linear_q.bias': layer_state.pop('attention.self.query.bias'),
+                'mha.linear_q.weight': layer_state.pop('attention.self.query.weight'),
+                'mha.linear_k.bias': layer_state.pop('attention.self.key.bias'),
+                'mha.linear_k.weight': layer_state.pop('attention.self.key.weight'),
+                'mha.linear_v.bias': layer_state.pop('attention.self.value.bias'),
+                'mha.linear_v.weight': layer_state.pop('attention.self.value.weight'),
+                'mha.linear_o.bias': layer_state.pop('attention.output.dense.bias'),
+                'mha.linear_o.weight': layer_state.pop('attention.output.dense.weight'),
+                # norms
+                'norm1.bias': layer_state.pop('attention.output.LayerNorm.bias'),
+                'norm1.weight': layer_state.pop('attention.output.LayerNorm.weight'),
+                'norm2.bias': layer_state.pop('output.LayerNorm.bias'),
+                'norm2.weight': layer_state.pop('output.LayerNorm.weight'),
+            })
+            assert len(layer_state) == 0
+
+        #
+        assert len(state_dict) == 2
+
+
 class OPTModel(models.OPTModel):
     def load_pretrained(self, state_dict: dict):
         # embeddings
@@ -36,7 +108,7 @@ class OPTModel(models.OPTModel):
             for k in removed_keys:
                 state_dict.pop(k)
 
-            # feedforwards
+            # load states
             v.load_state_dict({
                 # ffd
                 'ffd.fc1.bias': layer_state.pop('fc1.bias'),
@@ -141,6 +213,9 @@ def convert(name: str):
     elif name.lower().find('llama') != -1:
         ModelType = LLaMAModel
         PretrainedType = T.LlamaForCausalLM
+    elif name.lower().find('bert') != -1:
+        ModelType = BertModel
+        PretrainedType = T.BertModel
     else:
         raise NotImplementedError
     pretrained = PretrainedType.from_pretrained(name)
@@ -172,11 +247,18 @@ def convert(name: str):
         high=config['vocab_size'],
         size=[batch_size, seq_length]
     )
-    y_1, y_2 = pretrained(x)['logits'], model(x)
-    if name.lower().find('sheared'):
+    if name.lower().find('bert') != -1:
+        y_1 = pretrained(x)['last_hidden_state']
+        y_2 = model(x)
+    else:
+        y_1 = pretrained(x)['logits']
+        y_2 = model(x)
+    if name.lower().find('sheared') != -1:
         # a small different in sheared-llama
-        # "rms_norm_eps": 1e-05
+        # due to rms_norm_eps=1e-05
         assert torch.abs(y_1 - y_2).mean() < 0.1
+    elif name.lower().find('bert') != -1:
+        assert torch.allclose(y_1, y_2, atol=1e-1)
     else:
         assert torch.allclose(y_1, y_2, atol=1e-3)
 
@@ -199,6 +281,7 @@ def convert(name: str):
 
 
 def main():
+    # bert-base-uncased
     # facebook/opt-125m
     # facebook/opt-1.3b
     # facebook/opt-2.7b
@@ -206,7 +289,7 @@ def main():
     # openlm-research/open_llama_7b
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--name', default='facebook/opt-1.3b',
+        '--name', default='bert-base-uncased',
         help='specify model name or path'
     )
     args = parser.parse_args()

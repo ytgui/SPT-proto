@@ -6,8 +6,8 @@ This is a Triton implementation of the Flash Attention algorithm
 """
 
 import torch
-
 import triton
+from torch import nn
 import triton.language as tl
 
 
@@ -30,9 +30,12 @@ def _fwd_kernel(
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
     offs_n = tl.arange(0, BLOCK_N)
     offs_d = tl.arange(0, BLOCK_DMODEL)
-    off_q = off_hz * stride_qh + offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
-    off_k = off_hz * stride_qh + offs_n[None, :] * stride_kn + offs_d[:, None] * stride_kk
-    off_v = off_hz * stride_qh + offs_n[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    off_q = off_hz * stride_qh + \
+        offs_m[:, None] * stride_qm + offs_d[None, :] * stride_qk
+    off_k = off_hz * stride_qh + \
+        offs_n[None, :] * stride_kn + offs_d[:, None] * stride_kk
+    off_v = off_hz * stride_qh + \
+        offs_n[:, None] * stride_qm + offs_d[None, :] * stride_qk
     # Initialize pointers to Q, K, V
     q_ptrs = Q + off_q
     k_ptrs = K + off_k
@@ -50,7 +53,8 @@ def _fwd_kernel(
         qk = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
         qk += tl.dot(q, k)
         qk *= sm_scale
-        qk = tl.where(offs_m[:, None] >= (start_n + offs_n[None, :]), qk, float("-inf"))
+        qk = tl.where(offs_m[:, None] >= (
+            start_n + offs_n[None, :]), qk, float("-inf"))
         # compute new m
         m_curr = tl.maximum(tl.max(qk, 1), m_prev)
         # correct old l
@@ -82,7 +86,8 @@ def _fwd_kernel(
     tl.store(m_ptrs, m_prev)
     # initialize pointers to output
     offs_n = tl.arange(0, BLOCK_DMODEL)
-    off_o = off_hz * stride_oh + offs_m[:, None] * stride_om + offs_n[None, :] * stride_on
+    off_o = off_hz * stride_oh + \
+        offs_m[:, None] * stride_om + offs_n[None, :] * stride_on
     out_ptrs = Out + off_o
     tl.store(out_ptrs, acc)
 
@@ -140,11 +145,16 @@ def _bwd_kernel(
         offs_m = tl.arange(0, BLOCK_N)
         offs_k = tl.arange(0, BLOCK_DMODEL)
         # initialize pointers to value-like data
-        q_ptrs = Q + (offs_qm[:, None] * stride_qm + offs_k[None, :] * stride_qk)
-        k_ptrs = K + (offs_n[:, None] * stride_kn + offs_k[None, :] * stride_kk)
-        v_ptrs = V + (offs_n[:, None] * stride_qm + offs_k[None, :] * stride_qk)
-        do_ptrs = DO + (offs_qm[:, None] * stride_qm + offs_k[None, :] * stride_qk)
-        dq_ptrs = DQ + (offs_qm[:, None] * stride_qm + offs_k[None, :] * stride_qk)
+        q_ptrs = Q + (offs_qm[:, None] * stride_qm +
+                      offs_k[None, :] * stride_qk)
+        k_ptrs = K + (offs_n[:, None] * stride_kn +
+                      offs_k[None, :] * stride_kk)
+        v_ptrs = V + (offs_n[:, None] * stride_qm +
+                      offs_k[None, :] * stride_qk)
+        do_ptrs = DO + (offs_qm[:, None] * stride_qm +
+                        offs_k[None, :] * stride_qk)
+        dq_ptrs = DQ + (offs_qm[:, None] * stride_qm +
+                        offs_k[None, :] * stride_qk)
         # pointer to row-wise quantities in value-like data
         D_ptrs = D + off_hz * N_CTX
         m_ptrs = M + off_hz * N_CTX
@@ -162,7 +172,8 @@ def _bwd_kernel(
             # recompute p = softmax(qk, dim=-1).T
             # NOTE: `do` is pre-divided by `l`; no normalization here
             qk = tl.dot(q, tl.trans(k))
-            qk = tl.where(offs_m_curr[:, None] >= (offs_n[None, :]), qk, float("-inf"))
+            qk = tl.where(offs_m_curr[:, None] >= (
+                offs_n[None, :]), qk, float("-inf"))
             m = tl.load(m_ptrs + offs_m_curr)
             p = tl.exp(qk * sm_scale - m[:, None])
             # compute dv
@@ -188,8 +199,10 @@ def _bwd_kernel(
             q_ptrs += BLOCK_M * stride_qm
             do_ptrs += BLOCK_M * stride_qm
         # write-back
-        dv_ptrs = DV + (offs_n[:, None] * stride_qm + offs_k[None, :] * stride_qk)
-        dk_ptrs = DK + (offs_n[:, None] * stride_kn + offs_k[None, :] * stride_kk)
+        dv_ptrs = DV + (offs_n[:, None] * stride_qm +
+                        offs_k[None, :] * stride_qk)
+        dk_ptrs = DK + (offs_n[:, None] * stride_kn +
+                        offs_k[None, :] * stride_kk)
         tl.store(dv_ptrs, dv)
         tl.store(dk_ptrs, dk)
 
@@ -208,8 +221,10 @@ class _attention(torch.autograd.Function):
         assert Lk in {16, 32, 64, 128}
         o = torch.empty_like(q)
         grid = (triton.cdiv(q.shape[2], BLOCK), q.shape[0] * q.shape[1], 1)
-        L = torch.empty((q.shape[0] * q.shape[1], q.shape[2]), device=q.device, dtype=torch.float32)
-        m = torch.empty((q.shape[0] * q.shape[1], q.shape[2]), device=q.device, dtype=torch.float32)
+        L = torch.empty((q.shape[0] * q.shape[1], q.shape[2]),
+                        device=q.device, dtype=torch.float32)
+        m = torch.empty((q.shape[0] * q.shape[1], q.shape[2]),
+                        device=q.device, dtype=torch.float32)
         num_warps = 4 if Lk <= 64 else 8
 
         _fwd_kernel[grid](
@@ -266,6 +281,33 @@ class _attention(torch.autograd.Function):
 
 
 flash_attention = _attention.apply
+
+
+class FlashAttention(nn.Module):
+    def __init__(self,
+                 d_head: int,
+                 p_dropout: float):
+        nn.Module.__init__(self)
+        #
+        self.d_head = d_head
+        self.p_dropout = p_dropout
+        self.scaling = float(d_head) ** -0.5
+        self.dropout = nn.Dropout(p_dropout)
+
+    def forward(self,
+                q: torch.Tensor,
+                k: torch.Tensor,
+                v: torch.Tensor,
+                attn_mask: torch.Tensor = None):
+        assert q.dim() == 4
+        assert k.dim() == 4
+        assert v.dim() == 4
+        assert q.size(0) == k.size(0)
+        assert q.size(0) == v.size(0)
+
+        #
+        y = flash_attention(q, k, v, self.scaling)
+        return y
 
 
 # Changes:

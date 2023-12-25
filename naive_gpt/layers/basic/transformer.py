@@ -8,12 +8,14 @@ class MultiheadAttention(nn.Module):
                  d_model: int,
                  n_heads: int,
                  attention_fn: nn.Module,
+                 head_first: bool,
                  bias: bool):
         nn.Module.__init__(self)
         #
         self.d_model = d_model
         self.n_heads = n_heads
         self.attn_fn = attention_fn
+        self.head_first = head_first
         #
         self.linear_q = nn.Linear(d_model, d_model, bias=bias)
         self.linear_k = nn.Linear(d_model, d_model, bias=bias)
@@ -37,6 +39,10 @@ class MultiheadAttention(nn.Module):
         q = q.view([q.size(0), q.size(1), self.n_heads, -1])
         k = k.view([k.size(0), k.size(1), self.n_heads, -1])
         v = v.view([v.size(0), v.size(1), self.n_heads, -1])
+        if self.head_first:
+            q = q.transpose(1, 2).contiguous()
+            k = k.transpose(1, 2).contiguous()
+            v = v.transpose(1, 2).contiguous()
 
         # [N, S, H, E]
         y: torch.Tensor = self.attn_fn(
@@ -44,6 +50,8 @@ class MultiheadAttention(nn.Module):
         )
 
         # [N, S, H * E]
+        if self.head_first:
+            y = y.transpose(1, 2).contiguous()
         y = y.view([y.size(0), y.size(1), -1])
         y = self.linear_o(y)
 
@@ -58,6 +66,7 @@ class TransformerBlock(nn.Module):
                  attention_fn: nn.Module,
                  feedforward_fn: nn.Module,
                  attention_bias: bool,
+                 head_first: bool,
                  pre_norm: bool):
         nn.Module.__init__(self)
         #
@@ -67,6 +76,7 @@ class TransformerBlock(nn.Module):
             d_model=d_model,
             n_heads=n_heads,
             attention_fn=attention_fn,
+            head_first=head_first,
             bias=attention_bias
         )
         # ffn

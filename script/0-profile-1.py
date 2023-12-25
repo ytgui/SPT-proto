@@ -5,12 +5,11 @@ import argparse
 from torch import nn, optim
 from naive_gpt import layers
 from fast_transformers import attention
-from triton_flash import flash_attention
+from triton_flash import FlashAttention
 from torch import profiler
 
 
-def load_layer(name: str,
-               attention: str,
+def load_layer(attention: str,
                seq_length: int,
                batch_size: int):
     n_heads = 32
@@ -35,6 +34,21 @@ def load_layer(name: str,
             ),
             feedforward_fn=nn.Identity(),
             attention_bias=True,
+            head_first=False,
+            pre_norm=True
+        )
+        return loader, model.to(cuda_device)
+    elif attention == 'flash':
+        model = layers.TransformerBlock(
+            d_model=d_model, n_heads=n_heads,
+            layernorm_fn=nn.LayerNorm(d_model),
+            attention_fn=FlashAttention(
+                d_head=d_model // n_heads,
+                p_dropout=0.0
+            ),
+            feedforward_fn=nn.Identity(),
+            attention_bias=True,
+            head_first=True,
             pre_norm=True
         )
         return loader, model.to(cuda_device)
@@ -42,14 +56,12 @@ def load_layer(name: str,
         raise RuntimeError
 
 
-def profile(name: str,
-            attention: str,
+def profile(attention: str,
             seq_length: int,
             batch_size: int,
             compile: bool,
             d_lora: int):
     #
-    print('name:', name)
     print('attention:', attention)
     print('seq_length:', seq_length)
     print('batch_size:', batch_size)
@@ -57,7 +69,6 @@ def profile(name: str,
 
     # model
     loader, model = load_layer(
-        name=name,
         attention=attention,
         seq_length=seq_length,
         batch_size=batch_size
@@ -126,11 +137,7 @@ def profile(name: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--name', default='opt-2048',
-        help='specify model name or path'
-    )
-    parser.add_argument(
-        '--attention', default='full',
+        '--attention', default='flash',
         help='specify full, flash, lhs, pq'
     )
     parser.add_argument(
@@ -153,7 +160,6 @@ def main():
 
     #
     profile(
-        name=args.name,
         attention=args.attention,
         seq_length=args.seq_length,
         batch_size=args.batch_size,
@@ -164,38 +170,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-def legacy_main():
-    n_heads = 32
-    d_model = 2048
-    batch_size = 16
-    seq_length = 512
-    d_head = d_model // n_heads
-    cuda_device = 'cuda'
-
-    #
-    q = torch.randn(
-        size=[batch_size, n_heads, seq_length, d_head],
-        requires_grad=True, device=cuda_device
-    )
-    k = torch.randn(
-        size=[batch_size, n_heads, seq_length, d_head],
-        requires_grad=True, device=cuda_device
-    )
-    v = torch.randn(
-        size=[batch_size, n_heads, seq_length, d_head],
-        requires_grad=True, device=cuda_device
-    )
-
-    # N, L, H, E
-    attention_fn = attention.ReformerAttention()
-
-    # N, H, L, E
-    y = flash_attention(q, k, v, 1.0 / math.sqrt(d_head))
-    torch.sum(y).backward()
-
-    #
 
 
 if __name__ == '__main__':

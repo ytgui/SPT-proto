@@ -1,11 +1,8 @@
-import math
 import time
 import torch
 import argparse
 from torch import nn, optim
 from naive_gpt import layers
-from fast_transformers import attention
-from triton_flash import FlashAttention
 from torch import profiler
 
 
@@ -25,31 +22,43 @@ def load_layer(attention: str,
 
     #
     if attention == 'full':
-        model = layers.TransformerBlock(
+        model = layers.MultiheadAttention(
             d_model=d_model, n_heads=n_heads,
-            layernorm_fn=nn.LayerNorm(d_model),
             attention_fn=layers.VanillaAttention(
                 d_head=d_model // n_heads,
                 p_dropout=0.0
             ),
-            feedforward_fn=nn.Identity(),
-            attention_bias=True,
-            head_first=False,
-            pre_norm=True
+            head_first=False, bias=True
         )
         return loader, model.to(cuda_device)
     elif attention == 'flash':
-        model = layers.TransformerBlock(
+        model = layers.MultiheadAttention(
             d_model=d_model, n_heads=n_heads,
-            layernorm_fn=nn.LayerNorm(d_model),
-            attention_fn=FlashAttention(
+            attention_fn=layers.FlashAttention(
                 d_head=d_model // n_heads,
                 p_dropout=0.0
             ),
-            feedforward_fn=nn.Identity(),
-            attention_bias=True,
-            head_first=True,
-            pre_norm=True
+            head_first=True, bias=True
+        )
+        return loader, model.to(cuda_device)
+    elif attention == 'local':
+        model = layers.MultiheadAttention(
+            d_model=d_model, n_heads=n_heads,
+            attention_fn=layers.LocalAttention(
+                d_head=d_model // n_heads,
+                local_context=64, p_dropout=0.0
+            ),
+            head_first=True, bias=True
+        )
+        return loader, model.to(cuda_device)
+    elif attention == 'reformer':
+        model = layers.MultiheadAttention(
+            d_model=d_model, n_heads=n_heads,
+            attention_fn=layers.ReformerAttention(
+                d_head=d_model // n_heads,
+                p_dropout=0.0
+            ),
+            head_first=True, bias=True
         )
         return loader, model.to(cuda_device)
     else:
@@ -88,7 +97,7 @@ def profile(attention: str,
     for _ in range(20):
         torch.cuda.synchronize()
         x = loader()
-        y_1 = model(x)
+        y_1 = model(x, x, x)
         torch.sum(y_1).backward()
         optimizer.step()
         model.zero_grad()
@@ -98,7 +107,7 @@ def profile(attention: str,
     torch.cuda.synchronize()
     before = time.time()
     x = loader()
-    y_1 = model(x)
+    y_1 = model(x, x, x)
     torch.sum(y_1).backward()
     optimizer.step()
     model.zero_grad()
@@ -120,7 +129,7 @@ def profile(attention: str,
         for _ in range(20):
             torch.cuda.synchronize()
             x = loader()
-            y_1 = model(x)
+            y_1 = model(x, x, x)
             torch.sum(y_1).backward()
             optimizer.step()
             model.zero_grad()
@@ -137,8 +146,8 @@ def profile(attention: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--attention', default='flash',
-        help='specify full, flash, lhs, pq'
+        '--attention', default='local',
+        help='specify full, flash, local, reformer, pq'
     )
     parser.add_argument(
         '--compile', action='store_true',
@@ -166,10 +175,6 @@ def main():
         compile=args.compile,
         d_lora=args.d_lora
     )
-
-
-if __name__ == '__main__':
-    main()
 
 
 if __name__ == '__main__':

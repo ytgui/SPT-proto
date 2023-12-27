@@ -1,3 +1,11 @@
+# 3rd
+try:
+    from .collect.fast_wrapper import LocalAttention
+    from .collect.fast_wrapper import ReformerAttention
+    from .collect.triton_flash import FlashAttention
+except ImportError as e:
+    print('import 3rd error', e)
+
 # utils
 from .basic.utils import FnModule
 from .basic.utils import LlamaRMSNorm
@@ -10,7 +18,6 @@ from .basic.quantizer import PQV2
 from .basic.position import RotaryEmbedding
 from .basic.attention import VanillaAttention
 from .basic.attention import RotaryAttention
-from .basic.multihead import MultiheadAttention
 
 # Feed-forward
 from .basic.feedforward import Feedforward
@@ -21,6 +28,7 @@ from .sparse.feedforward import RoutedFFN
 from .sparse.feedforward import RoutedLLaMaFFN
 
 # Transformer
+from .basic.transformer import MultiheadAttention
 from .basic.transformer import TransformerBlock
 
 # LoRA

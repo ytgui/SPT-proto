@@ -292,7 +292,7 @@ class FlashAttention(nn.Module):
         self.d_head = d_head
         self.p_dropout = p_dropout
         self.scaling = float(d_head) ** -0.5
-        self.dropout = nn.Dropout(p_dropout)
+        assert p_dropout == 0.0
 
     def forward(self,
                 q: torch.Tensor,

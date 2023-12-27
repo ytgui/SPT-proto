@@ -31,6 +31,26 @@ def load_layer(attention: str,
             head_first=False, bias=True
         )
         return loader, model.to(cuda_device)
+    elif attention == '8bit':
+        from accelerate import utils
+        model = layers.MultiheadAttention(
+            d_model=d_model, n_heads=n_heads,
+            attention_fn=layers.VanillaAttention(
+                d_head=d_model // n_heads,
+                p_dropout=0.0
+            ),
+            head_first=False, bias=True
+        )
+        state_dict = model.state_dict()
+        bnb_config = utils.BnbQuantizationConfig(
+            load_in_8bit=True, llm_int8_threshold=6
+        )
+        quantized_model = utils.load_and_quantize_model(
+            model, weights_location=state_dict,
+            bnb_quantization_config=bnb_config,
+            device_map=cuda_device
+        )
+        return loader, quantized_model
     elif attention == 'flash':
         model = layers.MultiheadAttention(
             d_model=d_model, n_heads=n_heads,
@@ -48,7 +68,7 @@ def load_layer(attention: str,
                 d_head=d_model // n_heads,
                 local_context=64, p_dropout=0.0
             ),
-            head_first=True, bias=True
+            head_first=False, bias=True
         )
         return loader, model.to(cuda_device)
     elif attention == 'reformer':
@@ -58,7 +78,27 @@ def load_layer(attention: str,
                 d_head=d_model // n_heads,
                 p_dropout=0.0
             ),
-            head_first=True, bias=True
+            head_first=False, bias=True
+        )
+        return loader, model.to(cuda_device)
+    elif attention == 'pq-naive':
+        model = layers.MultiheadAttention(
+            d_model=d_model, n_heads=n_heads,
+            attention_fn=layers.SparseVanillaAttentionV1(
+                d_head=d_model // n_heads, p_dropout=0.0,
+                d_codeword=8, n_codewords=16
+            ),
+            head_first=False, bias=True
+        )
+        return loader, model.to(cuda_device)
+    elif attention == 'pq-optimized':
+        model = layers.MultiheadAttention(
+            d_model=d_model, n_heads=n_heads,
+            attention_fn=layers.SparseVanillaAttentionV2(
+                d_head=d_model // n_heads, p_dropout=0.0,
+                d_codeword=8, n_codewords=16
+            ),
+            head_first=False, bias=True
         )
         return loader, model.to(cuda_device)
     else:
@@ -146,8 +186,8 @@ def profile(attention: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--attention', default='local',
-        help='specify full, flash, local, reformer, pq'
+        '--attention', default='reformer',
+        help='specify full, 8bit, flash, local, reformer, pq-naive, pq-optimized'
     )
     parser.add_argument(
         '--compile', action='store_true',

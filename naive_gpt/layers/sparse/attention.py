@@ -7,8 +7,7 @@ class SparseVanillaAttentionV1(layers.VanillaAttention):
                  d_head: int,
                  p_dropout: float,
                  d_codeword: int,
-                 n_codewords: int,
-                 n_subspaces: int):
+                 n_codewords: int):
         layers.VanillaAttention.__init__(
             self, d_head=d_head,
             p_dropout=p_dropout
@@ -16,12 +15,11 @@ class SparseVanillaAttentionV1(layers.VanillaAttention):
         #
         self.d_codeword = d_codeword
         self.n_codewords = n_codewords
-        self.n_subspaces = n_subspaces
         #
         self.quantizer = layers.PQV1(
             d_codeword=d_codeword,
             n_codewords=n_codewords,
-            n_subspaces=n_subspaces
+            n_subspaces=d_head // d_codeword
         )
         #
         self.trigger: torch.Tensor
@@ -126,7 +124,8 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
             self.scaling * attn_values, min=-10.0, max=10.0
         )
         attn_values = kernels.softmax(
-            fixed_indptr, csr_indices, values=attn_values
+            fixed_indptr, csr_indices, values=attn_values,
+            masked=True if attn_mask is not None else False
         )
         return fixed_indptr, csr_indices, attn_values
 
@@ -283,7 +282,8 @@ class SparseRotaryAttentionV2(layers.RotaryAttention):
             self.scaling * attn_values, min=-10.0, max=10.0
         )
         attn_values = kernels.softmax(
-            fixed_indptr, csr_indices, values=attn_values
+            fixed_indptr, csr_indices, values=attn_values,
+            masked=True if attn_mask is not None else False
         )
         return fixed_indptr, csr_indices, attn_values
 

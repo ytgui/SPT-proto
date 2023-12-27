@@ -51,8 +51,7 @@ class SparseLoRAHandler(LoRAHandler):
         )
         #
         assert stage in [
-            'lora', 'ffn',
-            'mha_v1', 'mha_v2'
+            'lora', 'pq_v1', 'pq_v2'
         ]
         self.stage = stage
 
@@ -85,16 +84,21 @@ class SparseLoRAHandler(LoRAHandler):
     def onVanillaAttention(self,
                            name: str,
                            child: layers.VanillaAttention):
-        if self.stage != 'mha_v1':
+        if self.stage == 'pq_v1':
+            Module = layers.SparseVanillaAttentionV1
+        elif self.stage == 'pq_v2':
+            Module = layers.SparseVanillaAttentionV2
+        else:
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(
             child, layers.VanillaAttention
         )
-        Module = layers.SparseVanillaAttentionV1
+        #
         new_model = Module(
-            d_head=child.d_head, p_dropout=child.p_dropout,
-            d_codeword=8, n_codewords=16, n_subspaces=child.d_head // 8
+            d_head=child.d_head,
+            p_dropout=child.p_dropout,
+            d_codeword=8, n_codewords=16
         )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)
@@ -103,80 +107,21 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
-        if self.stage != 'mha_v1':
+        if self.stage == 'pq_v1':
+            Module = layers.SparseRotaryAttentionV1
+        elif self.stage == 'pq_v2':
+            Module = layers.SparseRotaryAttentionV2
+        else:
             print('[SKIP]', name, type(child).__name__)
             return
         assert isinstance(
-            child, layers.RotaryAttention
+            child, layers.VanillaAttention
         )
-        Module = layers.SparseRotaryAttentionV1
+        #
         new_model = Module(
-            d_head=child.d_head, p_dropout=child.p_dropout,
-            d_codeword=8, n_codewords=16, n_subspaces=child.d_head // 8
-        )
-        print('[UPGRADE]', name, type(child).__name__,
-              '->', type(new_model).__name__)
-        return new_model
-
-    def onSparseVanillaAttentionV1(self,
-                                   name: str,
-                                   child: layers.SparseVanillaAttentionV1):
-        if self.stage != 'mha_v2':
-            print('[SKIP]', name, type(child).__name__)
-            return
-        assert isinstance(
-            child, layers.SparseVanillaAttentionV1
-        )
-        Module = layers.SparseVanillaAttentionV2
-        new_model = Module.from_pretrained(
-            source=child
-        )
-        print('[UPGRADE]', name, type(child).__name__,
-              '->', type(new_model).__name__)
-        return new_model
-
-    def onSparseRotaryAttentionV1(self,
-                                  name: str,
-                                  child: layers.SparseRotaryAttentionV1):
-        if self.stage != 'mha_v2':
-            print('[SKIP]', name, type(child).__name__)
-            return
-        assert isinstance(
-            child, layers.SparseRotaryAttentionV1
-        )
-        Module = layers.SparseRotaryAttentionV2
-        new_model = Module.from_pretrained(
-            source=child
-        )
-        print('[UPGRADE]', name, type(child).__name__,
-              '->', type(new_model).__name__)
-        return new_model
-
-    def onFeedforward(self,
-                      name: str,
-                      child: layers.Feedforward):
-        if self.stage != 'ffn':
-            print('[SKIP]', name, type(child).__name__)
-            return
-        assert isinstance(child, layers.Feedforward)
-        new_model = layers.LoRARoutedFFN.from_pretrained(
-            d_lora=self.d_lora, block_size=child.d_feedforward // 4,
-            source=child
-        )
-        print('[UPGRADE]', name, type(child).__name__,
-              '->', type(new_model).__name__)
-        return new_model
-
-    def onLLaMaFeedforward(self,
-                           name: str,
-                           child: layers.LLaMaFeedforward):
-        if self.stage != 'ffn':
-            print('[SKIP]', name, type(child).__name__)
-            return
-        assert isinstance(child, layers.LLaMaFeedforward)
-        new_model = layers.LoRARoutedLLaMaFFN.from_pretrained(
-            d_lora=self.d_lora, block_size=child.d_feedforward // 4,
-            source=child
+            d_head=child.d_head,
+            p_dropout=child.p_dropout,
+            d_codeword=8, n_codewords=16
         )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)

@@ -63,22 +63,6 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
             'trigger', torch.scalar_tensor(False, dtype=torch.bool)
         )
 
-    @staticmethod
-    def from_pretrained(source: SparseVanillaAttentionV1):
-        assert isinstance(
-            source, SparseVanillaAttentionV1
-        )
-        model = layers.SparseVanillaAttentionV2(
-            d_head=source.d_head, d_codeword=source.d_codeword,
-            n_codewords=source.n_codewords, p_dropout=0.0
-        )
-        output = model.load_state_dict(
-            source.state_dict(), strict=False
-        )
-        if len(output.missing_keys) != 0:
-            raise RuntimeError
-        return model
-
     def _get_attn(self,
                   q: torch.Tensor,
                   k: torch.Tensor,
@@ -117,11 +101,13 @@ class SparseVanillaAttentionV2(layers.VanillaAttention):
         )
 
         # attention
+        attn_values: torch.Tensor
         attn_values = kernels.sddmm(
             fixed_indptr, csr_indices, query=q, key=k
         )
+        attn_values = attn_values.multiply_(self.scaling)
         attn_values = torch.clamp_(
-            self.scaling * attn_values, min=-10.0, max=10.0
+            attn_values, min=-10.0, max=10.0
         )
         attn_values = kernels.softmax(
             fixed_indptr, csr_indices, values=attn_values,
@@ -146,8 +132,7 @@ class SparseRotaryAttentionV1(layers.RotaryAttention):
                  d_head: int,
                  p_dropout: float,
                  d_codeword: int,
-                 n_codewords: int,
-                 n_subspaces: int):
+                 n_codewords: int):
         layers.RotaryAttention.__init__(
             self, d_head=d_head,
             p_dropout=p_dropout
@@ -155,7 +140,6 @@ class SparseRotaryAttentionV1(layers.RotaryAttention):
         #
         self.d_codeword = d_codeword
         self.n_codewords = n_codewords
-        self.n_subspaces = n_subspaces
         #
         self.quantizer = layers.PQV1(
             d_codeword=d_codeword,
@@ -212,22 +196,6 @@ class SparseRotaryAttentionV2(layers.RotaryAttention):
         self.register_buffer(
             'trigger', torch.scalar_tensor(False, dtype=torch.bool)
         )
-
-    @staticmethod
-    def from_pretrained(source: SparseRotaryAttentionV1):
-        assert isinstance(
-            source, SparseRotaryAttentionV1
-        )
-        model = layers.SparseRotaryAttentionV2(
-            d_head=source.d_head, d_codeword=source.d_codeword,
-            n_codewords=source.n_codewords, p_dropout=0.0
-        )
-        output = model.load_state_dict(
-            source.state_dict(), strict=False
-        )
-        if len(output.missing_keys) != 0:
-            raise RuntimeError
-        return model
 
     def _get_attn(self,
                   q: torch.Tensor,

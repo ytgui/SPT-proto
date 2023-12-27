@@ -88,6 +88,7 @@ class LLaMAModel(LLaMABase):
                     activation=nn.SiLU()
                 ),
                 attention_bias=False,
+                head_first=False,
                 pre_norm=True
             )
         )

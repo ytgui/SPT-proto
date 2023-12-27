@@ -14,7 +14,7 @@ class GLUEDataModule(L.LightningDataModule):
                  seq_length: int,
                  batch_size: int,
                  num_workers: int,
-                 tokenizer='bert'):
+                 tokenizer: str):
         super().__init__()
         #
         self.root = root

@@ -106,6 +106,7 @@ class OPTModel(OPTBase):
                     p_dropout=p_dropout
                 ),
                 attention_bias=True,
+                head_first=False,
                 pre_norm=True
             )
         )

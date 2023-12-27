@@ -14,3 +14,6 @@ from .flanmini import FlanMiniDataModule
 
 # Wikitext
 from .wikitext import WikitextDataModule
+
+# GLUE
+from .glue import GLUEDataModule

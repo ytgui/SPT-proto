@@ -65,8 +65,7 @@ class MMLUDataModule(L.LightningDataModule):
         return data.DataLoader(
             dataset, shuffle=False,
             batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            pin_memory=torch.cuda.is_available()
+            num_workers=self.num_workers
         )
 
     def val_dataloader(self):

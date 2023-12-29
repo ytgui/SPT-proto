@@ -34,11 +34,18 @@ class GLUEDataset(data.IterableDataset):
             sentence = sample['sentence']
             if self.text_transform is not None:
                 output = self.text_transform(
-                    [sentence, question]
+                    [question, sentence]
                 )
         elif 'question2' in sample:
             sentence1 = sample['question1']
             sentence2 = sample['question2']
+            if self.text_transform is not None:
+                output = self.text_transform(
+                    [sentence1, sentence2]
+                )
+        elif 'sentence2' in sample:
+            sentence1 = sample['sentence1']
+            sentence2 = sample['sentence2']
             if self.text_transform is not None:
                 output = self.text_transform(
                     [sentence1, sentence2]

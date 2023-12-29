@@ -53,7 +53,7 @@ class LightningModel(L.LightningModule):
             weight_decay=self.weight_decay
         )
         scheduler = lr.ExponentialLR(
-            optimizer, gamma=0.9
+            optimizer, gamma=0.5
         )
         return [optimizer], [scheduler]
 
@@ -64,9 +64,10 @@ class LightningModel(L.LightningModule):
         logit = self.model(
             tokens, token_types=types
         )
-        output = self.cls(
-            torch.mean(logit, dim=1)
-        )
+        output = self.cls(logit[:, 0, :])
+        # output = self.cls(
+        #     torch.mean(logit, dim=1)
+        # )
         loss = self.loss_fn(
             output, target=labels.flatten()
         )

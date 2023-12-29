@@ -108,8 +108,7 @@ def load_layer(attention: str,
 def profile(attention: str,
             seq_length: int,
             batch_size: int,
-            compile: bool,
-            d_lora: int):
+            compile: bool):
     #
     print('attention:', attention)
     print('seq_length:', seq_length)
@@ -186,7 +185,7 @@ def profile(attention: str,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--attention', default='reformer',
+        '--attention', default='pq-optimized',
         help='specify full, 8bit, flash, local, reformer, pq-naive, pq-optimized'
     )
     parser.add_argument(
@@ -201,10 +200,6 @@ def main():
         '--batch_size', default=16, type=int,
         help='specify batch size'
     )
-    parser.add_argument(
-        '--d_lora', help='dim oflow rank adaptation',
-        default=16
-    )
     args = parser.parse_args()
 
     #
@@ -212,8 +207,7 @@ def main():
         attention=args.attention,
         seq_length=args.seq_length,
         batch_size=args.batch_size,
-        compile=args.compile,
-        d_lora=args.d_lora
+        compile=args.compile
     )
 
 

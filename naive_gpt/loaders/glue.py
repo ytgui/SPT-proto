@@ -23,7 +23,7 @@ class GLUEDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         #
-        AT = transformers.AutoTokenizer
+        AT = transformers.BertTokenizer
         self.tokenizer = AT.from_pretrained(tokenizer)
         self.pad_value = self.tokenizer.pad_token_id or 0
 

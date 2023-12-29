@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from naive_gpt import layers
 from fast_transformers import attention, masking
 
 
@@ -49,6 +50,43 @@ class LocalAttention(nn.Module):
         return y
 
 
+class RotaryLocalAttention(LocalAttention):
+    def __init__(self,
+                 d_head: int,
+                 p_dropout: float,
+                 local_context: int,
+                 max_length: int = 2048):
+        LocalAttention.__init__(
+            self, d_head=d_head,
+            p_dropout=p_dropout,
+            local_context=local_context
+        )
+        #
+        self.embedding = layers.RotaryEmbedding(
+            n_embeddings=max_length, d_model=d_head
+        )
+        self.cached_ids: torch.Tensor
+        self.register_buffer(
+            'cached_ids', torch.arange(max_length)
+        )
+        self.max_length = max_length
+
+    def forward(self,
+                q: torch.Tensor,
+                k: torch.Tensor,
+                v: torch.Tensor,
+                attn_mask: torch.Tensor = None):
+        # rotary
+        q = self.embedding(
+            q, ids=self.cached_ids[:q.size(1)]
+        )
+        k = self.embedding(
+            k, ids=self.cached_ids[:k.size(1)]
+        )
+        return LocalAttention.forward(
+            self, q, k, v, attn_mask=attn_mask
+        )
+
 
 class ReformerAttention(nn.Module):
     def __init__(self,
@@ -92,3 +130,38 @@ class ReformerAttention(nn.Module):
             key_lengths=length_mask
         )
         return y
+
+
+class RotaryReformerAttention(ReformerAttention):
+    def __init__(self,
+                 d_head: int,
+                 p_dropout: float,
+                 max_length: int = 2048):
+        ReformerAttention.__init__(
+            self, d_head=d_head, p_dropout=p_dropout
+        )
+        #
+        self.embedding = layers.RotaryEmbedding(
+            n_embeddings=max_length, d_model=d_head
+        )
+        self.cached_ids: torch.Tensor
+        self.register_buffer(
+            'cached_ids', torch.arange(max_length)
+        )
+        self.max_length = max_length
+
+    def forward(self,
+                q: torch.Tensor,
+                k: torch.Tensor,
+                v: torch.Tensor,
+                attn_mask: torch.Tensor = None):
+        # rotary
+        q = self.embedding(
+            q, ids=self.cached_ids[:q.size(1)]
+        )
+        k = self.embedding(
+            k, ids=self.cached_ids[:k.size(1)]
+        )
+        return ReformerAttention.forward(
+            self, q, k, v, attn_mask=attn_mask
+        )

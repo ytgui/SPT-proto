@@ -51,7 +51,8 @@ class SparseLoRAHandler(LoRAHandler):
         )
         #
         assert stage in [
-            'lora', 'pq-v1', 'pq-v2'
+            'lora', 'pq-v1', 'pq-v2',
+            'local', 'reformer'
         ]
         self.stage = stage
 
@@ -85,9 +86,28 @@ class SparseLoRAHandler(LoRAHandler):
                            name: str,
                            child: layers.VanillaAttention):
         if self.stage == 'pq-v1':
-            Module = layers.SparseVanillaAttentionV1
+            new_model = layers.SparseVanillaAttentionV1(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout,
+                d_codeword=8, n_codewords=16
+            )
         elif self.stage == 'pq-v2':
-            Module = layers.SparseVanillaAttentionV2
+            new_model = layers.SparseVanillaAttentionV2(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout,
+                d_codeword=8, n_codewords=16
+            )
+        elif self.stage == 'reformer':
+            new_model = layers.ReformerAttention(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout
+            )
+        elif self.stage == 'local':
+            new_model = layers.LocalAttention(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout,
+                local_context=32
+            )
         else:
             print('[SKIP]', name, type(child).__name__)
             return
@@ -95,11 +115,6 @@ class SparseLoRAHandler(LoRAHandler):
             child, layers.VanillaAttention
         )
         #
-        new_model = Module(
-            d_head=child.d_head,
-            p_dropout=child.p_dropout,
-            d_codeword=8, n_codewords=16
-        )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)
         return new_model
@@ -108,9 +123,28 @@ class SparseLoRAHandler(LoRAHandler):
                           name: str,
                           child: layers.RotaryAttention):
         if self.stage == 'pq-v1':
-            Module = layers.SparseRotaryAttentionV1
+            new_model = layers.SparseRotaryAttentionV1(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout,
+                d_codeword=8, n_codewords=16
+            )
         elif self.stage == 'pq-v2':
-            Module = layers.SparseRotaryAttentionV2
+            new_model = layers.SparseRotaryAttentionV2(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout,
+                d_codeword=8, n_codewords=16
+            )
+        elif self.stage == 'reformer':
+            new_model = layers.RotaryReformerAttention(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout
+            )
+        elif self.stage == 'local':
+            new_model = layers.RotaryLocalAttention(
+                d_head=child.d_head,
+                p_dropout=child.p_dropout,
+                local_context=32
+            )
         else:
             print('[SKIP]', name, type(child).__name__)
             return
@@ -118,11 +152,6 @@ class SparseLoRAHandler(LoRAHandler):
             child, layers.VanillaAttention
         )
         #
-        new_model = Module(
-            d_head=child.d_head,
-            p_dropout=child.p_dropout,
-            d_codeword=8, n_codewords=16
-        )
         print('[UPGRADE]', name, type(child).__name__,
               '->', type(new_model).__name__)
         return new_model

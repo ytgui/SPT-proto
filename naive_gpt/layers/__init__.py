@@ -3,6 +3,8 @@ from .collect.triton_flash import FlashAttention
 try:
     from .collect.fast_wrapper import LocalAttention
     from .collect.fast_wrapper import ReformerAttention
+    from .collect.fast_wrapper import RotaryLocalAttention
+    from .collect.fast_wrapper import RotaryReformerAttention
 except ImportError as e:
     print('import fast transformer error', e)
 

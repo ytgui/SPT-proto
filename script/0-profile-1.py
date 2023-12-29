@@ -66,7 +66,7 @@ def load_layer(attention: str,
             d_model=d_model, n_heads=n_heads,
             attention_fn=layers.LocalAttention(
                 d_head=d_model // n_heads,
-                local_context=64, p_dropout=0.0
+                local_context=32, p_dropout=0.0
             ),
             head_first=False, bias=True
         )

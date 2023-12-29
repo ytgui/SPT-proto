@@ -51,7 +51,7 @@ class SparseLoRAHandler(LoRAHandler):
         )
         #
         assert stage in [
-            'lora', 'pq_v1', 'pq_v2'
+            'lora', 'pq-v1', 'pq-v2'
         ]
         self.stage = stage
 
@@ -84,9 +84,9 @@ class SparseLoRAHandler(LoRAHandler):
     def onVanillaAttention(self,
                            name: str,
                            child: layers.VanillaAttention):
-        if self.stage == 'pq_v1':
+        if self.stage == 'pq-v1':
             Module = layers.SparseVanillaAttentionV1
-        elif self.stage == 'pq_v2':
+        elif self.stage == 'pq-v2':
             Module = layers.SparseVanillaAttentionV2
         else:
             print('[SKIP]', name, type(child).__name__)
@@ -107,9 +107,9 @@ class SparseLoRAHandler(LoRAHandler):
     def onRotaryAttention(self,
                           name: str,
                           child: layers.RotaryAttention):
-        if self.stage == 'pq_v1':
+        if self.stage == 'pq-v1':
             Module = layers.SparseRotaryAttentionV1
-        elif self.stage == 'pq_v2':
+        elif self.stage == 'pq-v2':
             Module = layers.SparseRotaryAttentionV2
         else:
             print('[SKIP]', name, type(child).__name__)

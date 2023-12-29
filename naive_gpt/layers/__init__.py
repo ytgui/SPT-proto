@@ -1,10 +1,10 @@
 # 3rd
+from .collect.triton_flash import FlashAttention
 try:
     from .collect.fast_wrapper import LocalAttention
     from .collect.fast_wrapper import ReformerAttention
-    from .collect.triton_flash import FlashAttention
 except ImportError as e:
-    print('import 3rd error', e)
+    print('import fast transformer error', e)
 
 # utils
 from .basic.utils import FnModule

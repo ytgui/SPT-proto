@@ -34,7 +34,7 @@ class LightningModel(L.LightningModule):
             )
         )
         # model adapter
-        for stage in ['lora', 'pq_v2']:
+        for stage in ['lora', 'pq-v2']:
             upgrader = utils.ModuleUpgrader(
                 handler=utils.SparseLoRAHandler(
                     d_lora=d_lora, stage=stage
